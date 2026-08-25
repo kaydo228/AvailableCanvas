@@ -22,6 +22,9 @@ export interface ShortcutActions {
   ungroup(groupId: Id): void;
   bringForward(ids: Id[]): void;
   sendBackward(ids: Id[]): void;
+  bringToFront(ids: Id[]): void;
+  sendToBack(ids: Id[]): void;
+  moveNodes(ids: Id[], dx: number, dy: number): void;
   resetZoom(): void;
   zoomToFit(): void;
   zoomToSelection(): void;
@@ -56,6 +59,36 @@ export interface Shortcut {
    */
   run?: (actions: ShortcutActions, context: ShortcutContext) => void;
 }
+
+/** Обычный шаг — 1, с Shift — 10 (ТЗ, раздел 6.3). */
+const NUDGE_STEP = 1;
+const NUDGE_STEP_FAST = 10;
+
+/** Пара «стрелка» и «Shift+стрелка» одной строкой. */
+const nudge = (keys: string, arrow: string, title: string, dx: number, dy: number): Shortcut[] => [
+  {
+    keys,
+    hint: arrow,
+    title,
+    group: 'Правка',
+    run: (actions, { selection }) => {
+      if (selection.length > 0) {
+        actions.moveNodes(selection, dx * NUDGE_STEP, dy * NUDGE_STEP);
+      }
+    },
+  },
+  {
+    keys: `Shift+${keys}`,
+    hint: `Shift+${arrow}`,
+    title: `${title} на 10`,
+    group: 'Правка',
+    run: (actions, { selection }) => {
+      if (selection.length > 0) {
+        actions.moveNodes(selection, dx * NUDGE_STEP_FAST, dy * NUDGE_STEP_FAST);
+      }
+    },
+  },
+];
 
 const tool = (keys: string, hint: string, title: string, name: string): Shortcut => ({
   keys,
@@ -112,8 +145,50 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: '$mod+Shift+KeyG', hint: '$mod+Shift+G', title: 'Разгруппировать', group: 'Правка' },
 
   // ── Слои ──────────────────────────────────────────────────────────────
-  { keys: 'BracketRight', hint: ']', title: 'Вперёд по слоям', group: 'Слои' },
-  { keys: 'BracketLeft', hint: '[', title: 'Назад по слоям', group: 'Слои' },
+  {
+    keys: 'BracketRight',
+    hint: ']',
+    title: 'Вперёд по слоям',
+    group: 'Слои',
+    run: (actions, { selection }) => {
+      if (selection.length > 0) actions.bringForward(selection);
+    },
+  },
+  {
+    keys: 'BracketLeft',
+    hint: '[',
+    title: 'Назад по слоям',
+    group: 'Слои',
+    run: (actions, { selection }) => {
+      if (selection.length > 0) actions.sendBackward(selection);
+    },
+  },
+  {
+    keys: '$mod+BracketRight',
+    hint: '$mod+]',
+    title: 'В самый верх',
+    group: 'Слои',
+    run: (actions, { selection }) => {
+      if (selection.length > 0) actions.bringToFront(selection);
+    },
+  },
+  {
+    keys: '$mod+BracketLeft',
+    hint: '$mod+[',
+    title: 'В самый низ',
+    group: 'Слои',
+    run: (actions, { selection }) => {
+      if (selection.length > 0) actions.sendToBack(selection);
+    },
+  },
+
+  // ── Сдвиг стрелками ───────────────────────────────────────────────────
+  // Шаг в МИРОВЫХ единицах, а не в экранных: иначе на разном зуме одно
+  // и то же нажатие двигало бы объект на разное расстояние по доске.
+  ...nudge('ArrowLeft', '←', 'Сдвинуть влево', -1, 0),
+  ...nudge('ArrowRight', '→', 'Сдвинуть вправо', 1, 0),
+  ...nudge('ArrowUp', '↑', 'Сдвинуть вверх', 0, -1),
+  ...nudge('ArrowDown', '↓', 'Сдвинуть вниз', 0, 1),
 
   // ── Вид ───────────────────────────────────────────────────────────────
   {
