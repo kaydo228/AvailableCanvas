@@ -22,7 +22,7 @@ fi
 if printf '%s' "$cmd" | grep -Eq '(cat|less|more|head|tail|open|bat)[^|;]*\.(env|pem|key)'; then
   deny "Чтение файла с секретами через терминал заблокировано."
 fi
-if printf '%s' "$cmd" | grep -Eq 'git[[:space:]]+(checkout|switch|reset)[[:space:]]+.*(main|master)'; then
+if printf '%s' "$cmd" | grep -Eq 'git[[:space:]]+(checkout|switch|reset)[[:space:]]+([^[:space:]]+[[:space:]]+)*([^[:space:]/]+/)?(main|master)([[:space:]]|$)'; then
   deny "Переключение и сброс main из сессии запрещены. Работаем только в своей ветке."
 fi
 
