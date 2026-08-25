@@ -90,6 +90,8 @@ export function ShapeView({
 
   return (
     <Group
+      id={node.id}
+      name="node"
       x={node.x}
       y={node.y}
       rotation={node.rotation}

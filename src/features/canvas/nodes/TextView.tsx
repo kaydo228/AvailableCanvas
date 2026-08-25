@@ -111,6 +111,7 @@ export function TextView({
   return (
     <Group
       id={node.id}
+      name="node"
       x={node.x}
       y={node.y}
       rotation={node.rotation}

@@ -5,12 +5,14 @@
  * Отдельные зоны про стор не знают, связывание живёт здесь.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Layer, Stage } from 'react-konva';
 
 import { EditingOverlay } from '@/features/canvas/nodes/EditingOverlay';
 import { NodesLayer } from '@/features/canvas/nodes/NodesLayer';
 import { PreviewNode } from '@/features/canvas/nodes/PreviewNode';
+import { SelectionTransformer } from '@/features/canvas/selection/SelectionTransformer';
+import { useImageInsert } from '@/features/canvas/tools/useImageInsert';
 import { useToolController } from '@/features/canvas/tools/useToolController';
 import { useBoardStore } from '@/shared/store/board';
 import type { Size } from './contract';
@@ -30,6 +32,23 @@ export function CanvasStage() {
   const setCanvasSize = useBoardStore((s) => s.setCanvasSize);
 
   const tools = useToolController();
+  // Холст — единственная точка подписки на Cmd+V, см. ImageInsertOptions.
+  const images = useImageInsert({ paste: true });
+
+  // Первый замер синхронный, до ResizeObserver: тот срабатывает через кадр,
+  // и вставка картинки сразу после открытия проекта успевала увидеть нулевой
+  // размер холста — картинка ложилась в начало мировых координат вместо
+  // центра экрана. Воспроизводилось ровно один раз, при первой вставке.
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      const next = { width: rect.width, height: rect.height };
+      setSize(next);
+      setCanvasSize(next);
+    }
+  }, [setCanvasSize]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -63,7 +82,13 @@ export function CanvasStage() {
 
   return (
     <div
+      // Холст принимает мышь и сброс файлов, поэтому это не «статический
+      // элемент с обработчиком», а самостоятельное приложение внутри страницы.
+      role="application"
+      aria-label="Холст доски"
       {...gestureProps}
+      onDragOver={images.onDragOver}
+      onDrop={images.onDrop}
       ref={(el) => {
         hostRef.current = el;
         gestureProps.ref?.(el);
@@ -88,6 +113,7 @@ export function CanvasStage() {
         <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
           <NodesLayer />
           <PreviewNode node={tools.preview} />
+          <SelectionTransformer />
         </Layer>
       </Stage>
 

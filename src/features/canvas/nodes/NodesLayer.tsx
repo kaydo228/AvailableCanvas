@@ -11,6 +11,7 @@ import type { ComponentType } from 'react';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 import type { NodeViewProps } from './contract';
+import { ImageView } from './ImageView';
 import { ShapeView } from './ShapeView';
 import { StickyView } from './StickyView';
 import { TextView } from './TextView';
@@ -25,6 +26,7 @@ const RENDERERS = {
   shape: ShapeView,
   text: TextView,
   sticky: StickyView,
+  image: ImageView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
 
 export function NodesLayer() {

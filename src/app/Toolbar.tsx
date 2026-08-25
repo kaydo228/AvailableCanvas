@@ -4,6 +4,7 @@
  * инструменты и видеть, что они работают.
  */
 
+import { useImageInsert } from '@/features/canvas/tools/useImageInsert';
 import type { Tool } from '@/shared/store/board';
 import { useBoardStore } from '@/shared/store/board';
 
@@ -18,6 +19,7 @@ const TOOLS: Array<{ id: Tool; label: string; hotkey: string }> = [
 ];
 
 export function Toolbar() {
+  const { pickFile } = useImageInsert();
   const activeTool = useBoardStore((s) => s.activeTool);
   const setTool = useBoardStore((s) => s.setTool);
   const zoom = useBoardStore((s) => s.document?.viewport.zoom ?? 1);
@@ -59,6 +61,21 @@ export function Toolbar() {
           {tool.label}
         </button>
       ))}
+      <button
+        type="button"
+        onClick={pickFile}
+        title="Картинка (I) — или перетащите файл на холст, или Cmd+V"
+        style={{
+          padding: '6px 10px',
+          border: 'none',
+          borderRadius: 6,
+          cursor: 'pointer',
+          background: '#f1f3f5',
+          color: '#111827',
+        }}
+      >
+        Картинка
+      </button>
       <span style={{ alignSelf: 'center', padding: '0 8px', color: '#6b7280' }}>
         {Math.round(zoom * 100)}% · узлов: {count}
       </span>
