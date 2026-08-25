@@ -5,8 +5,8 @@
  * stickyTool) — чистые функции и про стор не знают.
  */
 
-import { useCallback, useRef, useState } from 'react';
 import type Konva from 'konva';
+import { useCallback, useRef, useState } from 'react';
 
 import type { WorldPoint } from '@/features/canvas/engine/contract';
 import { toWorld } from '@/features/canvas/engine/viewport';

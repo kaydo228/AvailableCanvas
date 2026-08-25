@@ -10,11 +10,10 @@ import type { ComponentType } from 'react';
 
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
-
+import type { NodeViewProps } from './contract';
 import { ShapeView } from './ShapeView';
 import { StickyView } from './StickyView';
 import { TextView } from './TextView';
-import type { NodeViewProps } from './contract';
 
 /**
  * Регистрация типов. Приведение через unknown — цена того, что карта

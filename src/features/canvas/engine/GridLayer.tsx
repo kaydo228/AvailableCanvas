@@ -21,11 +21,7 @@ import { useMemo } from 'react';
 import { Layer, Shape } from 'react-konva';
 
 import type { GridProps } from './contract';
-import {
-  DEFAULT_GRID_COLOR,
-  DEFAULT_GRID_STEP,
-  computeGridLayout,
-} from './grid';
+import { computeGridLayout, DEFAULT_GRID_COLOR, DEFAULT_GRID_STEP } from './grid';
 
 /** Сторона точки в экранных пикселях. Не зависит от зума — см. шапку файла. */
 const DOT_SIZE = 2;
@@ -41,6 +37,7 @@ export const GridLayer = ({
   // Зависимости — примитивы, а не объекты: `viewport` и `size` прилетают
   // новыми объектами на каждый рендер родителя, по ним мемоизация была бы
   // холостой.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: примитивы намеренно, см. комментарий выше
   const layout = useMemo(
     () => computeGridLayout(viewport, size, step),
     [viewport.x, viewport.y, viewport.zoom, size.width, size.height, step],

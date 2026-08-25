@@ -145,8 +145,6 @@ export const ZOOM_MAX = 4;
 /** Узел с рамкой — всё, кроме коннектора. Нужен для трансформаций. */
 export type BoxNode = Exclude<Node, ConnectorNode>;
 
-export const isConnector = (node: Node): node is ConnectorNode =>
-  node.type === 'connector';
+export const isConnector = (node: Node): node is ConnectorNode => node.type === 'connector';
 
-export const isBoxNode = (node: Node): node is BoxNode =>
-  node.type !== 'connector';
+export const isBoxNode = (node: Node): node is BoxNode => node.type !== 'connector';

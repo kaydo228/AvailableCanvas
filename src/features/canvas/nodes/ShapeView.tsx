@@ -12,8 +12,8 @@
  * рендерера даст двойной масштаб.
  */
 
-import { Ellipse, Group, Line, Rect, Text } from 'react-konva';
 import type Konva from 'konva';
+import { Ellipse, Group, Line, Rect, Text } from 'react-konva';
 
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
 import type { ShapeNode } from '@/shared/types/document';
@@ -35,11 +35,7 @@ const SELECTION_STROKE_WIDTH = 1.5;
  * Konva.Line с `closed` замыкает контур сама — отдельная последняя точка
  * не нужна и даёт лишний узел на стыке при толстой обводке.
  */
-function polygonPoints(
-  shape: 'triangle' | 'diamond',
-  width: number,
-  height: number,
-): number[] {
+function polygonPoints(shape: 'triangle' | 'diamond', width: number, height: number): number[] {
   if (shape === 'triangle') {
     return [width / 2, 0, width, height, 0, height];
   }
@@ -73,13 +69,7 @@ export function ShapeView({
   const body =
     node.shape === 'ellipse' ? (
       // У Konva.Ellipse начало координат в центре, у остальных — в углу.
-      <Ellipse
-        x={width / 2}
-        y={height / 2}
-        radiusX={width / 2}
-        radiusY={height / 2}
-        {...paint}
-      />
+      <Ellipse x={width / 2} y={height / 2} radiusX={width / 2} radiusY={height / 2} {...paint} />
     ) : node.shape === 'triangle' || node.shape === 'diamond' ? (
       <Line points={polygonPoints(node.shape, width, height)} closed {...paint} />
     ) : (

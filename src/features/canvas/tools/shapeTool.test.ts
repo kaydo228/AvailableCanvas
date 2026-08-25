@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-
-import {
-  DEFAULT_SHAPE_SIZE,
-  createShapeNode,
-  shapeFromDrag,
-  type ShapeKind,
-} from '@/features/canvas/tools/shapeTool';
 import { DRAG_THRESHOLD } from '@/features/canvas/tools/geometry';
+import {
+  createShapeNode,
+  DEFAULT_SHAPE_SIZE,
+  type ShapeKind,
+  shapeFromDrag,
+} from '@/features/canvas/tools/shapeTool';
 import { doc } from '@/shared/model/fixtures';
 
 /**
@@ -15,13 +14,7 @@ import { doc } from '@/shared/model/fixtures';
  * клик без протяжки — и что получившийся узел пригоден для документа.
  */
 
-const ALL_SHAPES: ShapeKind[] = [
-  'rect',
-  'roundRect',
-  'ellipse',
-  'triangle',
-  'diamond',
-];
+const ALL_SHAPES: ShapeKind[] = ['rect', 'roundRect', 'ellipse', 'triangle', 'diamond'];
 
 /** Заведомо больше порога клика при zoom = 1. */
 const FAR = DRAG_THRESHOLD * 25;
@@ -106,9 +99,7 @@ describe('shapeFromDrag — клик без протяжки', () => {
     const current = { x: 20, y: 0 };
 
     expect(shapeFromDrag(start, current, 'rect', false, 1).width).toBe(20);
-    expect(shapeFromDrag(start, current, 'rect', false, 0.1).width).toBe(
-      DEFAULT_SHAPE_SIZE.width,
-    );
+    expect(shapeFromDrag(start, current, 'rect', false, 0.1).width).toBe(DEFAULT_SHAPE_SIZE.width);
   });
 
   it('Shift при клике не мешает: размер всё равно по умолчанию', () => {
@@ -122,7 +113,10 @@ describe('shapeFromDrag — клик без протяжки', () => {
 describe('созданный узел — инварианты', () => {
   const cases: Array<[string, () => ReturnType<typeof createShapeNode>]> = [
     ['протяжка', () => shapeFromDrag({ x: 0, y: 0 }, { x: FAR, y: FAR }, 'rect', false, 1)],
-    ['обратная протяжка', () => shapeFromDrag({ x: FAR, y: FAR }, { x: 0, y: 0 }, 'rect', false, 1)],
+    [
+      'обратная протяжка',
+      () => shapeFromDrag({ x: FAR, y: FAR }, { x: 0, y: 0 }, 'rect', false, 1),
+    ],
     ['клик', () => shapeFromDrag({ x: 7, y: 7 }, { x: 7, y: 7 }, 'rect', false, 1)],
   ];
 

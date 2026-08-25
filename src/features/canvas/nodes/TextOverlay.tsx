@@ -61,6 +61,7 @@ export function TextOverlay({
     el.select();
   }, [autoGrow]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: value перезапускает авторост textarea
   useLayoutEffect(autoGrow, [autoGrow, value]);
 
   // Escape отменяет, Cmd/Ctrl+Enter подтверждает. Одиночный Enter — перенос

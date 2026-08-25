@@ -50,10 +50,7 @@ export type TextNodeOverrides = Partial<Omit<TextNode, 'id' | 'type'>>;
  * `overrides.text` заменяет стиль целиком, а не сливается по полям:
  * частичное слияние двух источников стиля читается хуже, чем один явный.
  */
-export function createTextNode(
-  rect: Rect,
-  overrides: TextNodeOverrides = {},
-): TextNode {
+export function createTextNode(rect: Rect, overrides: TextNodeOverrides = {}): TextNode {
   const base: TextNode = {
     id: crypto.randomUUID(),
     type: 'text',
@@ -94,17 +91,9 @@ export function createTextNode(
  * тот же дрожащий сдвиг мыши — это всё ещё клик по экрану, но вчетверо
  * больший сдвиг в мире.
  */
-export function textFromDrag(
-  start: WorldPoint,
-  current: WorldPoint,
-  zoom: number,
-): TextNode {
+export function textFromDrag(start: WorldPoint, current: WorldPoint, zoom: number): TextNode {
   if (isClick(start, current, zoom)) {
-    const rect = rectAround(
-      start,
-      DEFAULT_TEXT_SIZE.width,
-      DEFAULT_TEXT_SIZE.height,
-    );
+    const rect = rectAround(start, DEFAULT_TEXT_SIZE.width, DEFAULT_TEXT_SIZE.height);
     return createTextNode(rect, { autoWidth: true });
   }
 

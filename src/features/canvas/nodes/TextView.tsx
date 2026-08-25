@@ -24,9 +24,9 @@
  * по центру выравнивается только подпись фигуры.
  */
 
+import type { Text as KonvaText } from 'konva/lib/shapes/Text';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Group, Rect, Text } from 'react-konva';
-import type { Text as KonvaText } from 'konva/lib/shapes/Text';
 
 import type { Size } from '@/features/canvas/engine/contract';
 import type { TextNode } from '@/shared/types/document';
@@ -83,8 +83,7 @@ export function TextView({
   // Порядок как в сокращённой записи CSS font: сначала начертание, потом
   // насыщенность. 'bold italic' холст не разбирает, 'italic bold' — разбирает.
   const fontStyle =
-    `${style.italic ? 'italic ' : ''}${style.bold ? 'bold' : ''}`.trim() ||
-    'normal';
+    `${style.italic ? 'italic ' : ''}${style.bold ? 'bold' : ''}`.trim() || 'normal';
 
   // Высота одной строки с полями — нижняя граница области попадания.
   const lineBox = style.fontSize * lineHeight + TEXT_PADDING * 2;
@@ -97,9 +96,7 @@ export function TextView({
     if (!text) return;
     const measured = { width: text.width(), height: text.height() };
     setFrame((prev) =>
-      prev.width === measured.width && prev.height === measured.height
-        ? prev
-        : measured,
+      prev.width === measured.width && prev.height === measured.height ? prev : measured,
     );
   });
 
@@ -109,9 +106,7 @@ export function TextView({
   // Ширина у autoWidth не задаётся вовсе — Konva считает её по содержимому.
   // Присвоение width={undefined} запрещено (exactOptionalPropertyTypes),
   // поэтому пропс не пишется, а подмешивается.
-  const sizing = node.autoWidth
-    ? {}
-    : { width: node.width, wrap: 'word' as const };
+  const sizing = node.autoWidth ? {} : { width: node.width, wrap: 'word' as const };
 
   return (
     <Group

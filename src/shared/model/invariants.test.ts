@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-
+import { connector, doc, shape } from '@/shared/model/fixtures';
 import {
   checkConnectorsNotGrouped,
   checkEndpointExclusive,
@@ -7,7 +7,6 @@ import {
   checkZoomInRange,
 } from '@/shared/model/invariants';
 import { removeNode } from '@/shared/model/operations';
-import { connector, doc, shape } from '@/shared/model/fixtures';
 
 /**
  * Пять инвариантов из раздела 5 docs/SPEC.md.
@@ -64,9 +63,7 @@ describe('инвариант 3 — у Endpoint ровно один из nodeId �
   });
 
   it('оба сразу — невалидно', () => {
-    expect(
-      checkEndpointExclusive({ nodeId: 'a', point: { x: 10, y: 10 } }),
-    ).toBe(false);
+    expect(checkEndpointExclusive({ nodeId: 'a', point: { x: 10, y: 10 } })).toBe(false);
   });
 
   it('ни одного — невалидно', () => {
@@ -98,7 +95,14 @@ describe('инвариант 4 — удаление узла отвязывае�
   });
 
   it('удаление узла с пятью привязанными линиями не роняет документ', () => {
-    const nodes = [shape('hub', 200, 200), shape('a'), shape('b'), shape('c'), shape('d'), shape('e')];
+    const nodes = [
+      shape('hub', 200, 200),
+      shape('a'),
+      shape('b'),
+      shape('c'),
+      shape('d'),
+      shape('e'),
+    ];
     const links = ['a', 'b', 'c', 'd', 'e'].map((id, i) => connector(`c${i}`, 'hub', id));
     const d = doc([...nodes, ...links]);
 

@@ -27,6 +27,4 @@ export interface NodeViewProps<T extends Node = Node> {
  * Карта «тип узла → компонент». Регистрация в одном месте, чтобы слой
  * не разрастался цепочкой if.
  */
-export type NodeRendererMap = Partial<
-  Record<Node['type'], ComponentType<NodeViewProps<never>>>
->;
+export type NodeRendererMap = Partial<Record<Node['type'], ComponentType<NodeViewProps<never>>>>;
