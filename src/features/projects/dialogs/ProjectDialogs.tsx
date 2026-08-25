@@ -20,7 +20,7 @@ import { TriangleAlert } from 'lucide-react';
 import { AlertDialog, Dialog } from 'radix-ui';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
 
 import {
   createProject,
@@ -297,8 +297,8 @@ function DeleteDialog({ projectId }: { projectId: Id }) {
 
 /**
  * Точка входа: слушает `dialogsStore` и рисует ровно один диалог.
- * `<Toaster/>` живёт здесь же — ошибки записи показывает этот модуль,
- * лезть за ним в чужой layout незачем.
+ * `<Toaster/>` переехал в корень роутера: он нужен и холсту тоже,
+ * а этот модуль рендерится только на маршруте списка проектов.
  */
 export const ProjectDialogs = () => {
   const kind = useProjectDialogs((s) => s.kind);
@@ -310,7 +310,6 @@ export const ProjectDialogs = () => {
       {kind === 'rename' && projectId && <RenameDialog projectId={projectId} />}
       {kind === 'duplicate' && projectId && <DuplicateDialog projectId={projectId} />}
       {kind === 'delete' && projectId && <DeleteDialog projectId={projectId} />}
-      <Toaster position="bottom-right" richColors closeButton />
     </>
   );
 };
