@@ -289,7 +289,7 @@ describe('пробел', () => {
     });
     fireEvent(document.body, keyDown);
 
-    expect(canvas.dataset['cursor']).toBe('grab');
+    expect(canvas.dataset.cursor).toBe('grab');
     expect(keyDown.defaultPrevented).toBe(true);
   });
 
@@ -300,7 +300,7 @@ describe('пробел', () => {
     const keyDown = createEvent.keyDown(editor, { code: 'Space', key: ' ' });
     fireEvent(editor, keyDown);
 
-    expect(canvas.dataset['cursor']).toBe('default');
+    expect(canvas.dataset.cursor).toBe('default');
     expect(keyDown.defaultPrevented).toBe(false);
   });
 
@@ -308,20 +308,20 @@ describe('пробел', () => {
     const { canvas } = mount();
 
     fireEvent.keyDown(document.body, { code: 'Space', key: ' ' });
-    expect(canvas.dataset['cursor']).toBe('grab');
+    expect(canvas.dataset.cursor).toBe('grab');
 
     fireEvent.keyUp(document.body, { code: 'Space', key: ' ' });
-    expect(canvas.dataset['cursor']).toBe('default');
+    expect(canvas.dataset.cursor).toBe('default');
   });
 
   it('не залипает при потере фокуса окном', () => {
     const { canvas } = mount();
 
     fireEvent.keyDown(document.body, { code: 'Space', key: ' ' });
-    expect(canvas.dataset['cursor']).toBe('grab');
+    expect(canvas.dataset.cursor).toBe('grab');
 
     fireEvent.blur(window);
-    expect(canvas.dataset['cursor']).toBe('default');
+    expect(canvas.dataset.cursor).toBe('default');
   });
 });
 
@@ -339,8 +339,8 @@ describe('панорамирование перетаскиванием', () => 
       clientY: 200,
     });
 
-    expect(canvas.dataset['cursor']).toBe('grabbing');
-    expect(canvas.dataset['panning']).toBe('yes');
+    expect(canvas.dataset.cursor).toBe('grabbing');
+    expect(canvas.dataset.panning).toBe('yes');
 
     fireEvent.pointerMove(window, {
       pointerId: 1,
@@ -358,9 +358,9 @@ describe('панорамирование перетаскиванием', () => 
       clientY: 250,
     });
 
-    expect(canvas.dataset['panning']).toBe('no');
+    expect(canvas.dataset.panning).toBe('no');
     // Пробел всё ещё зажат — значит рука наготове.
-    expect(canvas.dataset['cursor']).toBe('grab');
+    expect(canvas.dataset.cursor).toBe('grab');
   });
 
   it('средней кнопкой мыши работает без пробела', () => {
@@ -381,10 +381,10 @@ describe('панорамирование перетаскиванием', () => 
     });
 
     expect(lastViewport(changes)).toEqual({ x: -40, y: 30, zoom: 1 });
-    expect(canvas.dataset['cursor']).toBe('grabbing');
+    expect(canvas.dataset.cursor).toBe('grabbing');
 
     fireEvent.pointerUp(window, { pointerId: 1, buttons: 0 });
-    expect(canvas.dataset['panning']).toBe('no');
+    expect(canvas.dataset.panning).toBe('no');
   });
 
   it('гасит mousedown средней кнопки — иначе браузер включит автопрокрутку', () => {
@@ -419,13 +419,13 @@ describe('панорамирование перетаскиванием', () => 
     fireEvent.pointerUp(window, { pointerId: 1, buttons: 0 });
 
     expect(changes).toHaveLength(0);
-    expect(canvas.dataset['cursor']).toBe('default');
+    expect(canvas.dataset.cursor).toBe('default');
   });
 
   it('с handTool двигает вид просто перетаскиванием', () => {
     const { canvas, changes } = mount({ handTool: true });
 
-    expect(canvas.dataset['cursor']).toBe('grab');
+    expect(canvas.dataset.cursor).toBe('grab');
 
     fireEvent.pointerDown(canvas, {
       pointerId: 1,
@@ -442,10 +442,10 @@ describe('панорамирование перетаскиванием', () => 
     });
 
     expect(lastViewport(changes)).toEqual({ x: -10, y: -20, zoom: 1 });
-    expect(canvas.dataset['cursor']).toBe('grabbing');
+    expect(canvas.dataset.cursor).toBe('grabbing');
 
     fireEvent.pointerUp(window, { pointerId: 1, buttons: 0 });
-    expect(canvas.dataset['cursor']).toBe('grab');
+    expect(canvas.dataset.cursor).toBe('grab');
   });
 });
 
@@ -492,7 +492,7 @@ describe('disabled', () => {
     expect(keyDown.defaultPrevented).toBe(false);
     // Пока идёт правка текста, страница ведёт себя как обычная страница.
     expect(scroll.defaultPrevented).toBe(false);
-    expect(canvas.dataset['cursor']).toBe('default');
-    expect(canvas.dataset['panning']).toBe('no');
+    expect(canvas.dataset.cursor).toBe('default');
+    expect(canvas.dataset.panning).toBe('no');
   });
 });

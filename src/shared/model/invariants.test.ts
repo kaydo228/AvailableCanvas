@@ -27,7 +27,7 @@ describe('инвариант 1 — order и nodes соответствуют о�
 
   it('ловит узел в nodes, которого нет в order', () => {
     const d = doc([shape('a')]);
-    d.nodes['b'] = shape('b');
+    d.nodes.b = shape('b');
     expect(checkOrderMatchesNodes(d)).toHaveLength(1);
   });
 
@@ -47,7 +47,7 @@ describe('инвариант 2 — коннектор не участвует в
 
   it('ловит groupId, приписанный коннектору', () => {
     const c = connector('c', 'a', 'b') as unknown as Record<string, unknown>;
-    c['groupId'] = 'g1';
+    c.groupId = 'g1';
     const d = doc([shape('a'), shape('b'), c as never]);
     expect(checkConnectorsNotGrouped(d)).toHaveLength(1);
   });
@@ -77,10 +77,10 @@ describe('инвариант 4 — удаление узла отвязывае�
 
     const next = removeNode(d, 'b');
 
-    expect(next.nodes['b']).toBeUndefined();
+    expect(next.nodes.b).toBeUndefined();
     expect(next.order).not.toContain('b');
 
-    const c = next.nodes['c'];
+    const c = next.nodes.c;
     expect(c).toBeDefined();
     expect(c?.type).toBe('connector');
 
