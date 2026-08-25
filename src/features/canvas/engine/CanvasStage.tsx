@@ -1,0 +1,103 @@
+/**
+ * Сборка холста: измерение размера + жесты (зона 2) + сетка (зона 3)
+ * + узлы + инструменты + оверлей ввода текста.
+ *
+ * Отдельные зоны про стор не знают, связывание живёт здесь.
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import { Layer, Stage } from 'react-konva';
+
+import { EditingOverlay } from '@/features/canvas/nodes/EditingOverlay';
+import { NodesLayer } from '@/features/canvas/nodes/NodesLayer';
+import { PreviewNode } from '@/features/canvas/nodes/PreviewNode';
+import { useToolController } from '@/features/canvas/tools/useToolController';
+import { useBoardStore } from '@/shared/store/board';
+
+import { GridLayer } from './GridLayer';
+import type { Size } from './contract';
+import { useCanvasGestures } from './useCanvasGestures';
+
+const EMPTY_VIEWPORT = { x: 0, y: 0, zoom: 1 };
+
+export function CanvasStage() {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<Size>({ width: 0, height: 0 });
+
+  const viewport = useBoardStore((s) => s.document?.viewport ?? EMPTY_VIEWPORT);
+  const activeTool = useBoardStore((s) => s.activeTool);
+  const editingNodeId = useBoardStore((s) => s.editingNodeId);
+  const setViewport = useBoardStore((s) => s.setViewport);
+  const setCanvasSize = useBoardStore((s) => s.setCanvasSize);
+
+  const tools = useToolController();
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const next = {
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      };
+      setSize(next);
+      setCanvasSize(next);
+    });
+
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [setCanvasSize]);
+
+  const { bind, cursor } = useCanvasGestures({
+    viewport,
+    size,
+    onViewportChange: setViewport,
+    handTool: activeTool === 'hand',
+    // Во время ввода текста жесты выключены: пробел должен печататься,
+    // а не панорамировать доску.
+    disabled: editingNodeId !== null,
+  });
+
+  const gestureProps = bind() as { ref?: (el: HTMLDivElement | null) => void };
+
+  return (
+    <div
+      {...gestureProps}
+      ref={(el) => {
+        hostRef.current = el;
+        gestureProps.ref?.(el);
+      }}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        cursor: tools.creating ? 'crosshair' : cursor,
+        touchAction: 'none',
+      }}
+    >
+      <Stage
+        width={size.width}
+        height={size.height}
+        onMouseDown={tools.onMouseDown}
+        onMouseMove={tools.onMouseMove}
+        onMouseUp={tools.onMouseUp}
+      >
+        <GridLayer viewport={viewport} size={size} />
+        <Layer
+          x={viewport.x}
+          y={viewport.y}
+          scaleX={viewport.zoom}
+          scaleY={viewport.zoom}
+        >
+          <NodesLayer />
+          <PreviewNode node={tools.preview} />
+        </Layer>
+      </Stage>
+
+      <EditingOverlay />
+    </div>
+  );
+}

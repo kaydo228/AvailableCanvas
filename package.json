@@ -1,0 +1,33 @@
+{
+  "name": "prostor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@use-gesture/react": "^10.3.1",
+    "immer": "^10.1.1",
+    "konva": "^10.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-konva": "^19.2.5",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^8.2.2",
+    "vitest": "^2.1.8"
+  }
+}
