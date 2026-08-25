@@ -1,11 +1,44 @@
 #!/usr/bin/env bash
 # UserPromptSubmit: пишет каждый промпт в журнал сессий.
 # Закрывает бонусный пункт ДЗ «журнал сессий с дословными промптами».
+#
+# Имя разработчика ищется цепочкой, а НЕ только в переменной окружения.
+# Причина: процесс Claude Code берёт окружение при старте, и правка
+# ~/.zshenv или ~/.zshrc до него не доходит до перезапуска — записи молча
+# уходят в unknown/, а обнаруживается это через день. Файл и git-конфиг
+# читаются в момент вызова, поэтому работают сразу.
 set -euo pipefail
 
-payload=$(cat)
-who="${DEV_NAME:-unknown}"
 root="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+resolve_name() {
+  # 1. Переменная окружения — если её всё-таки выставили для процесса.
+  if [ -n "${DEV_NAME:-}" ]; then
+    printf '%s' "$DEV_NAME"
+    return
+  fi
+
+  # 2. Локальный файл рядом с проектом. Не коммитится, у каждого свой.
+  if [ -f "$root/.claude/dev-name" ]; then
+    name=$(tr -d '[:space:]' < "$root/.claude/dev-name")
+    if [ -n "$name" ]; then
+      printf '%s' "$name"
+      return
+    fi
+  fi
+
+  # 3. Git-конфиг: он уже настроен у всех, кто коммитит.
+  name=$(git -C "$root" config user.name 2>/dev/null || true)
+  if [ -n "$name" ]; then
+    printf '%s' "$name" | tr ' ' '-'
+    return
+  fi
+
+  printf 'unknown'
+}
+
+payload=$(cat)
+who=$(resolve_name)
 dir="$root/sessions/$who"
 mkdir -p "$dir"
 
@@ -17,9 +50,7 @@ if [ ! -f "$file" ]; then
   printf '# Журнал сессий — %s — %s\n' "$who" "$(date +%Y-%m-%d)" > "$file"
 fi
 
-# symbolic-ref, а не rev-parse: в репозитории без коммитов rev-parse печатает
-# "HEAD" и одновременно падает, из-за чего в branch попадал и фолбэк "-".
-branch=$(git -C "$root" symbolic-ref --short -q HEAD 2>/dev/null || echo "-")
+branch=$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
 {
   printf '\n## %s · ветка `%s`\n\n' "$(date +%H:%M:%S)" "$branch"
   printf '```\n%s\n```\n' "$prompt"

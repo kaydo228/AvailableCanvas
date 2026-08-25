@@ -11,3 +11,6 @@ playwright-report/
 test-results/
 
 docs/PROMPTS-*.md
+
+# Имя разработчика для журнала сессий — у каждого своё.
+.claude/dev-name
