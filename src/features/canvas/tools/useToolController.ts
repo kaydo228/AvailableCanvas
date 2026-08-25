@@ -8,8 +8,9 @@
 import type Konva from 'konva';
 import { useCallback, useRef, useState } from 'react';
 
-import type { WorldPoint } from '@/features/canvas/engine/contract';
+import type { Rect, WorldPoint } from '@/features/canvas/engine/contract';
 import { toWorld } from '@/features/canvas/engine/viewport';
+import { normalizeRect } from '@/features/canvas/tools/geometry';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 
@@ -28,9 +29,13 @@ export function useToolController() {
   const setTool = useBoardStore((s) => s.setTool);
   const startEditing = useBoardStore((s) => s.startEditing);
   const clearSelection = useBoardStore((s) => s.clearSelection);
+  const selectInBox = useBoardStore((s) => s.selectInBox);
 
   const start = useRef<WorldPoint | null>(null);
   const [preview, setPreview] = useState<Node | null>(null);
+  // Рамка выделения инструментом «Выбор». Живёт отдельно от preview:
+  // это не будущий узел, а временная геометрия.
+  const [marquee, setMarquee] = useState<Rect | null>(null);
 
   const creating = CREATING.has(activeTool);
 
@@ -69,22 +74,41 @@ export function useToolController() {
       // Клик по пустому месту снимает выделение — но только инструментом
       // «Выбор», иначе создание узла заодно гасило бы выделение зря.
       if (!creating) {
-        if (event.target === event.target.getStage()) clearSelection();
+        // Протяжка по пустому месту — рамка выделения. По узлу — его перетаскивание,
+        // рамку начинать нельзя, иначе объект не сдвинуть.
+        if (event.target === event.target.getStage()) {
+          clearSelection();
+          const point = pointerWorld(event.target.getStage());
+          if (point && activeTool === 'select') start.current = point;
+        }
         return;
       }
       const point = pointerWorld(event.target.getStage());
       if (point) start.current = point;
     },
-    [clearSelection, creating, pointerWorld],
+    [activeTool, clearSelection, creating, pointerWorld],
   );
 
   const onMouseMove = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
-      if (!creating || !start.current) return;
+      if (!start.current) return;
       const point = pointerWorld(event.target.getStage());
-      if (point) setPreview(build(start.current, point, event.evt.shiftKey));
+      if (!point) return;
+
+      if (creating) {
+        setPreview(build(start.current, point, event.evt.shiftKey));
+        return;
+      }
+
+      if (activeTool === 'select') {
+        const box = normalizeRect(start.current, point);
+        setMarquee(box);
+        // Выделяем прямо по ходу протяжки: так видно, что попадёт в набор,
+        // до того как отпустил кнопку.
+        selectInBox(box);
+      }
     },
-    [build, creating, pointerWorld],
+    [activeTool, build, creating, pointerWorld, selectInBox],
   );
 
   const onMouseUp = useCallback(
@@ -92,7 +116,13 @@ export function useToolController() {
       const from = start.current;
       start.current = null;
       setPreview(null);
-      if (!creating || !from) return;
+      setMarquee(null);
+      if (!from) return;
+
+      if (!creating) {
+        // Рамкой уже выделили по ходу движения, на отпускании делать нечего.
+        return;
+      }
 
       const to = pointerWorld(event.target.getStage()) ?? from;
       const node = build(from, to, event.evt.shiftKey);
@@ -114,5 +144,5 @@ export function useToolController() {
     [addNode, build, creating, pointerWorld, select, setTool, startEditing],
   );
 
-  return { onMouseDown, onMouseMove, onMouseUp, preview, creating };
+  return { onMouseDown, onMouseMove, onMouseUp, preview, marquee, creating };
 }

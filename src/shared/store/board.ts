@@ -15,6 +15,13 @@ import {
   panBy as panViewportBy,
   zoomAt as zoomViewportAt,
 } from '@/features/canvas/engine/viewport';
+import {
+  sendBackward as reorderBackward,
+  bringForward as reorderForward,
+  sendToBack as reorderToBack,
+  bringToFront as reorderToFront,
+} from '@/features/canvas/selection/layerOrder';
+import { nodesInBox } from '@/features/canvas/selection/marquee';
 import type {
   Anchor,
   BoardDocument,
@@ -234,10 +241,34 @@ export const useBoardStore = create<BoardState>()(
     rotateNode: () => notImplemented('rotateNode'),
     duplicateNodes: () => notImplemented('duplicateNodes'),
 
-    bringForward: () => notImplemented('bringForward'),
-    sendBackward: () => notImplemented('sendBackward'),
-    bringToFront: () => notImplemented('bringToFront'),
-    sendToBack: () => notImplemented('sendToBack'),
+    // ─── Порядок слоёв: реализовано, зона A ───────────────────────────────
+    bringForward: (ids) =>
+      set((state) => {
+        if (state.document) {
+          state.document.order = reorderForward(state.document.order, ids);
+        }
+      }),
+
+    sendBackward: (ids) =>
+      set((state) => {
+        if (state.document) {
+          state.document.order = reorderBackward(state.document.order, ids);
+        }
+      }),
+
+    bringToFront: (ids) =>
+      set((state) => {
+        if (state.document) {
+          state.document.order = reorderToFront(state.document.order, ids);
+        }
+      }),
+
+    sendToBack: (ids) =>
+      set((state) => {
+        if (state.document) {
+          state.document.order = reorderToBack(state.document.order, ids);
+        }
+      }),
 
     group: () => notImplemented('group'),
     ungroup: () => notImplemented('ungroup'),
@@ -266,7 +297,10 @@ export const useBoardStore = create<BoardState>()(
       set((state) => {
         state.selection = state.document ? [...state.document.order] : [];
       }),
-    selectInBox: () => notImplemented('selectInBox'),
+    selectInBox: (box) =>
+      set((state) => {
+        state.selection = state.document ? nodesInBox(state.document, box) : [];
+      }),
 
     setTool: (tool) =>
       set((state) => {

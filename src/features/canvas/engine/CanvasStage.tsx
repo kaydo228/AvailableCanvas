@@ -11,6 +11,7 @@ import { Layer, Stage } from 'react-konva';
 import { EditingOverlay } from '@/features/canvas/nodes/EditingOverlay';
 import { NodesLayer } from '@/features/canvas/nodes/NodesLayer';
 import { PreviewNode } from '@/features/canvas/nodes/PreviewNode';
+import { MarqueeRect } from '@/features/canvas/selection/MarqueeRect';
 import { SelectionTransformer } from '@/features/canvas/selection/SelectionTransformer';
 import { useImageInsert } from '@/features/canvas/tools/useImageInsert';
 import { useToolController } from '@/features/canvas/tools/useToolController';
@@ -113,6 +114,15 @@ export function CanvasStage() {
         <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
           <NodesLayer />
           <PreviewNode node={tools.preview} />
+        </Layer>
+
+        {/*
+          Выделение — отдельный слой Konva. В общем слое каждый клик и каждое
+          движение рамки перерисовывали бы всю доску: на тысяче узлов это
+          заметно сразу.
+        */}
+        <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
+          <MarqueeRect box={tools.marquee} />
           <SelectionTransformer />
         </Layer>
       </Stage>

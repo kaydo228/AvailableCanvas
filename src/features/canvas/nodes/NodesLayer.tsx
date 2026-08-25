@@ -7,7 +7,9 @@
  */
 
 import type { ComponentType } from 'react';
+import { Group } from 'react-konva';
 
+import { useGroupDrag } from '@/features/canvas/selection/useGroupDrag';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 import type { NodeViewProps } from './contract';
@@ -37,13 +39,20 @@ export function NodesLayer() {
   const addToSelection = useBoardStore((s) => s.addToSelection);
   const startEditing = useBoardStore((s) => s.startEditing);
   const updateNode = useBoardStore((s) => s.updateNode);
+  const groupDrag = useGroupDrag();
 
   if (!document) return null;
 
   const selected = new Set(selection);
 
   return (
-    <>
+    // Обёртка нужна, чтобы поймать всплывающие события перетаскивания
+    // от любого узла: рендереры про выделение не знают.
+    <Group
+      onDragStart={groupDrag.onDragStart}
+      onDragMove={groupDrag.onDragMove}
+      onDragEnd={groupDrag.onDragEnd}
+    >
       {document.order.map((id) => {
         const node = document.nodes[id];
         if (!node) return null;
@@ -65,6 +74,6 @@ export function NodesLayer() {
           />
         );
       })}
-    </>
+    </Group>
   );
 }
