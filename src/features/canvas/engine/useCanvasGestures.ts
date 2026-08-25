@@ -24,19 +24,13 @@
  * но координаты курсора тогда придётся брать из `currentTarget` события.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
-
 import { useGesture } from '@use-gesture/react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Viewport } from '@/shared/types/document';
 
-import type {
-  CanvasGesturesOptions,
-  CanvasGesturesResult,
-  ScreenPoint,
-  Size,
-} from './contract';
+import type { CanvasGesturesOptions, CanvasGesturesResult, ScreenPoint, Size } from './contract';
 import { panBy, zoomAt } from './viewport';
 
 /**
@@ -97,16 +91,8 @@ const containerPoint = (
   };
 };
 
-export function useCanvasGestures(
-  options: CanvasGesturesOptions,
-): CanvasGesturesResult {
-  const {
-    viewport,
-    size,
-    onViewportChange,
-    handTool = false,
-    disabled = false,
-  } = options;
+export function useCanvasGestures(options: CanvasGesturesOptions): CanvasGesturesResult {
+  const { viewport, size, onViewportChange, handTool = false, disabled = false } = options;
 
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -150,12 +136,7 @@ export function useCanvasGestures(
         // что и последнее реальное — применив её, сдвинули бы вид дважды.
         if (disabled || !state.active) return;
 
-        const point = containerPoint(
-          state.event.clientX,
-          state.event.clientY,
-          container,
-          size,
-        );
+        const point = containerPoint(state.event.clientX, state.event.clientY, container, size);
 
         // Pinch на трекпаде Mac приходит сюда же — wheel с ctrlKey.
         if (state.ctrlKey || state.metaKey) {
@@ -163,13 +144,7 @@ export function useCanvasGestures(
           if (dy === 0) return;
 
           // Границы [0.1, 4] держит clampZoom внутри zoomAt.
-          applyViewport(
-            zoomAt(
-              viewportRef.current,
-              point,
-              Math.exp(-dy * ZOOM_WHEEL_SENSITIVITY),
-            ),
-          );
+          applyViewport(zoomAt(viewportRef.current, point, Math.exp(-dy * ZOOM_WHEEL_SENSITIVITY)));
           return;
         }
 

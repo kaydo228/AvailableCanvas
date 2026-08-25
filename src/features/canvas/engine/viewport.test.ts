@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  Rect,
-  ScreenPoint,
-  Size,
-  WorldPoint,
-} from '@/features/canvas/engine/contract';
+import type { Rect, ScreenPoint, Size, WorldPoint } from '@/features/canvas/engine/contract';
 import {
   clampZoom,
   fitToBox,
@@ -48,12 +43,8 @@ const expectPointClose = (actual: WorldPoint, expected: WorldPoint): void => {
 const expectContains = (outer: Rect, inner: Rect): void => {
   expect(inner.x).toBeGreaterThanOrEqual(outer.x - EPS);
   expect(inner.y).toBeGreaterThanOrEqual(outer.y - EPS);
-  expect(inner.x + inner.width).toBeLessThanOrEqual(
-    outer.x + outer.width + EPS,
-  );
-  expect(inner.y + inner.height).toBeLessThanOrEqual(
-    outer.y + outer.height + EPS,
-  );
+  expect(inner.x + inner.width).toBeLessThanOrEqual(outer.x + outer.width + EPS);
+  expect(inner.y + inner.height).toBeLessThanOrEqual(outer.y + outer.height + EPS);
 };
 
 describe('toWorld / toScreen', () => {
@@ -73,23 +64,17 @@ describe('toWorld / toScreen', () => {
     expect(toScreen({ x: 42, y: -7 }, viewport)).toEqual({ x: 42, y: -7 });
   });
 
-  it.each(viewports)(
-    'round-trip экран → мир → экран при zoom $zoom, x $x, y $y',
-    (viewport) => {
-      for (const point of probes) {
-        expectPointClose(toScreen(toWorld(point, viewport), viewport), point);
-      }
-    },
-  );
+  it.each(viewports)('round-trip экран → мир → экран при zoom $zoom, x $x, y $y', (viewport) => {
+    for (const point of probes) {
+      expectPointClose(toScreen(toWorld(point, viewport), viewport), point);
+    }
+  });
 
-  it.each(viewports)(
-    'round-trip мир → экран → мир при zoom $zoom, x $x, y $y',
-    (viewport) => {
-      for (const point of probes) {
-        expectPointClose(toWorld(toScreen(point, viewport), viewport), point);
-      }
-    },
-  );
+  it.each(viewports)('round-trip мир → экран → мир при zoom $zoom, x $x, y $y', (viewport) => {
+    for (const point of probes) {
+      expectPointClose(toWorld(toScreen(point, viewport), viewport), point);
+    }
+  });
 
   it('не мутирует аргументы', () => {
     const viewport: Viewport = { x: 10, y: 20, zoom: 2 };
@@ -102,12 +87,9 @@ describe('toWorld / toScreen', () => {
 });
 
 describe('clampZoom', () => {
-  it.each([0.1, 0.25, 0.5, 1, 2, 3.99, 4])(
-    'значение %s внутри диапазона не меняется',
-    (zoom) => {
-      expect(clampZoom(zoom)).toBe(zoom);
-    },
-  );
+  it.each([0.1, 0.25, 0.5, 1, 2, 3.99, 4])('значение %s внутри диапазона не меняется', (zoom) => {
+    expect(clampZoom(zoom)).toBe(zoom);
+  });
 
   it('возвращает границы как есть', () => {
     expect(clampZoom(ZOOM_MIN)).toBe(ZOOM_MIN);
@@ -121,12 +103,9 @@ describe('clampZoom', () => {
     },
   );
 
-  it.each([4.00001, 5, 100, 1e6])(
-    'значение %s выше максимума зажимается в ZOOM_MAX',
-    (zoom) => {
-      expect(clampZoom(zoom)).toBe(ZOOM_MAX);
-    },
-  );
+  it.each([4.00001, 5, 100, 1e6])('значение %s выше максимума зажимается в ZOOM_MAX', (zoom) => {
+    expect(clampZoom(zoom)).toBe(ZOOM_MAX);
+  });
 
   it('обрабатывает бесконечности и NaN, не выпуская не-число наружу', () => {
     expect(clampZoom(Number.POSITIVE_INFINITY)).toBe(ZOOM_MAX);
@@ -223,17 +202,15 @@ describe('zoomAt', () => {
     },
   );
 
-  it.each(zoomCases)('зум зажат в диапазоне: $name', ({
-    viewport,
-    cursor,
-    factor,
-    expectedZoom,
-  }) => {
-    const next = zoomAt(viewport, cursor, factor);
-    expect(next.zoom).toBeCloseTo(expectedZoom, PRECISION);
-    expect(next.zoom).toBeGreaterThanOrEqual(ZOOM_MIN);
-    expect(next.zoom).toBeLessThanOrEqual(ZOOM_MAX);
-  });
+  it.each(zoomCases)(
+    'зум зажат в диапазоне: $name',
+    ({ viewport, cursor, factor, expectedZoom }) => {
+      const next = zoomAt(viewport, cursor, factor);
+      expect(next.zoom).toBeCloseTo(expectedZoom, PRECISION);
+      expect(next.zoom).toBeGreaterThanOrEqual(ZOOM_MIN);
+      expect(next.zoom).toBeLessThanOrEqual(ZOOM_MAX);
+    },
+  );
 
   it('точка под курсором неподвижна на матрице курсоров и множителей', () => {
     const cursors: ScreenPoint[] = [
@@ -398,40 +375,23 @@ const fitCases: FitCase[] = [
 ];
 
 describe('fitToBox', () => {
-  it.each(fitCases)(
-    'бокс целиком внутри видимой области: $name',
-    ({ box, canvas, padding }) => {
-      const viewport = fitToBox(box, canvas, padding);
-      expectContains(visibleWorldRect(viewport, canvas), box);
-    },
-  );
+  it.each(fitCases)('бокс целиком внутри видимой области: $name', ({ box, canvas, padding }) => {
+    const viewport = fitToBox(box, canvas, padding);
+    expectContains(visibleWorldRect(viewport, canvas), box);
+  });
 
-  it.each(fitCases)('зум остаётся в диапазоне: $name', ({
-    box,
-    canvas,
-    padding,
-  }) => {
+  it.each(fitCases)('зум остаётся в диапазоне: $name', ({ box, canvas, padding }) => {
     const { zoom } = fitToBox(box, canvas, padding);
     expect(zoom).toBeGreaterThanOrEqual(ZOOM_MIN);
     expect(zoom).toBeLessThanOrEqual(ZOOM_MAX);
   });
 
-  it.each(fitCases)('бокс отцентрован в канвасе: $name', ({
-    box,
-    canvas,
-    padding,
-  }) => {
+  it.each(fitCases)('бокс отцентрован в канвасе: $name', ({ box, canvas, padding }) => {
     const viewport = fitToBox(box, canvas, padding);
     const visible = visibleWorldRect(viewport, canvas);
 
-    expect(visible.x + visible.width / 2).toBeCloseTo(
-      box.x + box.width / 2,
-      PRECISION,
-    );
-    expect(visible.y + visible.height / 2).toBeCloseTo(
-      box.y + box.height / 2,
-      PRECISION,
-    );
+    expect(visible.x + visible.width / 2).toBeCloseTo(box.x + box.width / 2, PRECISION);
+    expect(visible.y + visible.height / 2).toBeCloseTo(box.y + box.height / 2, PRECISION);
   });
 
   it('оставляет ровно padding пикселей по ограничивающей стороне', () => {
@@ -444,10 +404,7 @@ describe('fitToBox', () => {
     expect(viewport.zoom).toBeCloseTo(2.4, PRECISION);
 
     const topLeft = toScreen({ x: box.x, y: box.y }, viewport);
-    const bottomRight = toScreen(
-      { x: box.x + box.width, y: box.y + box.height },
-      viewport,
-    );
+    const bottomRight = toScreen({ x: box.x + box.width, y: box.y + box.height }, viewport);
 
     expect(topLeft.y).toBeCloseTo(padding, PRECISION);
     expect(canvas.height - bottomRight.y).toBeCloseTo(padding, PRECISION);
@@ -510,24 +467,30 @@ describe('fitToBox', () => {
 
 describe('visibleWorldRect', () => {
   it('при zoom=1 и нулевом смещении совпадает с канвасом', () => {
-    expect(
-      visibleWorldRect({ x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 }),
-    ).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+    expect(visibleWorldRect({ x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 })).toEqual({
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 600,
+    });
   });
 
   it('при zoom=2 показывает вдвое меньше мира', () => {
-    expect(
-      visibleWorldRect({ x: 0, y: 0, zoom: 2 }, { width: 800, height: 600 }),
-    ).toEqual({ x: 0, y: 0, width: 400, height: 300 });
+    expect(visibleWorldRect({ x: 0, y: 0, zoom: 2 }, { width: 800, height: 600 })).toEqual({
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 300,
+    });
   });
 
   it('учитывает смещение вида', () => {
-    expect(
-      visibleWorldRect(
-        { x: -200, y: 100, zoom: 0.5 },
-        { width: 1000, height: 600 },
-      ),
-    ).toEqual({ x: 400, y: -200, width: 2000, height: 1200 });
+    expect(visibleWorldRect({ x: -200, y: 100, zoom: 0.5 }, { width: 1000, height: 600 })).toEqual({
+      x: 400,
+      y: -200,
+      width: 2000,
+      height: 1200,
+    });
   });
 
   it.each(viewports)(
@@ -543,13 +506,10 @@ describe('visibleWorldRect', () => {
         x: 0,
         y: 0,
       });
-      expectPointClose(
-        toScreen(
-          { x: rect.x + rect.width, y: rect.y + rect.height },
-          viewport,
-        ),
-        { x: canvas.width, y: canvas.height },
-      );
+      expectPointClose(toScreen({ x: rect.x + rect.width, y: rect.y + rect.height }, viewport), {
+        x: canvas.width,
+        y: canvas.height,
+      });
     },
   );
 

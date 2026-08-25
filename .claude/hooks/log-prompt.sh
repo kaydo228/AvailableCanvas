@@ -17,7 +17,9 @@ if [ ! -f "$file" ]; then
   printf '# Журнал сессий — %s — %s\n' "$who" "$(date +%Y-%m-%d)" > "$file"
 fi
 
-branch=$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
+# symbolic-ref, а не rev-parse: в репозитории без коммитов rev-parse печатает
+# "HEAD" и одновременно падает, из-за чего в branch попадал и фолбэк "-".
+branch=$(git -C "$root" symbolic-ref --short -q HEAD 2>/dev/null || echo "-")
 {
   printf '\n## %s · ветка `%s`\n\n' "$(date +%H:%M:%S)" "$branch"
   printf '```\n%s\n```\n' "$prompt"

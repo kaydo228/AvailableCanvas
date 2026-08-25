@@ -1,0 +1,57 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+  "files": {
+    "includes": ["src/**", "e2e/**", "*.ts", "*.json"]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/features/**", "!src/features/canvas/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@/features/canvas/**",
+                      "**/features/canvas/**",
+                      "**/canvas/**",
+                      "../canvas/**"
+                    ],
+                    "message": "Зона A. Слайс не ходит в features/canvas напрямую: общее место — shared/types и shared/store, и правятся они вдвоём коммитом contract:. Нужно что-то из холста — запрос в docs/CONTRACT-REQUESTS.md."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

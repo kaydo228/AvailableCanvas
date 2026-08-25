@@ -99,22 +99,14 @@ export const panBy: PanBy = (viewport, dx, dy) => ({
  * он останется шире видимой области; это предел диапазона, а не ошибка.
  * Вырожденная сторона (нулевая) не ограничивает масштаб.
  */
-export const fitToBox: FitToBox = (
-  box,
-  canvas,
-  padding = DEFAULT_FIT_PADDING,
-) => {
+export const fitToBox: FitToBox = (box, canvas, padding = DEFAULT_FIT_PADDING) => {
   const target = normalizeRect(box);
 
   const availableWidth = Math.max(0, canvas.width - padding * 2);
   const availableHeight = Math.max(0, canvas.height - padding * 2);
 
-  const scaleX =
-    target.width > 0 ? availableWidth / target.width : Number.POSITIVE_INFINITY;
-  const scaleY =
-    target.height > 0
-      ? availableHeight / target.height
-      : Number.POSITIVE_INFINITY;
+  const scaleX = target.width > 0 ? availableWidth / target.width : Number.POSITIVE_INFINITY;
+  const scaleY = target.height > 0 ? availableHeight / target.height : Number.POSITIVE_INFINITY;
 
   const zoom = clampZoom(Math.min(scaleX, scaleY));
 

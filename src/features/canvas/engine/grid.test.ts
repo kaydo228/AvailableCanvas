@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { Size } from '@/features/canvas/engine/contract';
 import {
+  computeGridDensity,
+  computeGridLayout,
   DEFAULT_GRID_STEP,
   MAX_GRID_POINTS,
   MAX_SCREEN_GAP,
   MAX_STEP_SCALE,
   MIN_SCREEN_GAP,
-  computeGridDensity,
-  computeGridLayout,
   minVisibleZoom,
 } from '@/features/canvas/engine/grid';
 import { visibleWorldRect } from '@/features/canvas/engine/viewport';
@@ -51,15 +51,9 @@ const zooms: number[] = [
     ZOOM_MAX,
   ],
   // Равномерный проход.
-  ...Array.from(
-    { length: 60 },
-    (_, i) => ZOOM_MIN + ((ZOOM_MAX - ZOOM_MIN) * i) / 59,
-  ),
+  ...Array.from({ length: 60 }, (_, i) => ZOOM_MIN + ((ZOOM_MAX - ZOOM_MIN) * i) / 59),
   // Логарифмический проход — на мелком конце шаг мельче.
-  ...Array.from(
-    { length: 40 },
-    (_, i) => ZOOM_MIN * (ZOOM_MAX / ZOOM_MIN) ** (i / 39),
-  ),
+  ...Array.from({ length: 40 }, (_, i) => ZOOM_MIN * (ZOOM_MAX / ZOOM_MIN) ** (i / 39)),
 ];
 
 /** Зумы, при которых сетка обязана быть видимой. */
@@ -112,12 +106,8 @@ describe('computeGridDensity', () => {
   });
 
   it('порог видимости ровно на границе, а не размазан', () => {
-    expect(computeGridDensity(HIDE_BELOW, DEFAULT_GRID_STEP).visible).toBe(
-      true,
-    );
-    expect(
-      computeGridDensity(HIDE_BELOW * 0.999, DEFAULT_GRID_STEP).visible,
-    ).toBe(false);
+    expect(computeGridDensity(HIDE_BELOW, DEFAULT_GRID_STEP).visible).toBe(true);
+    expect(computeGridDensity(HIDE_BELOW * 0.999, DEFAULT_GRID_STEP).visible).toBe(false);
     // ZOOM_MIN лежит ниже порога — на самом дальнем конце сетки нет.
     expect(ZOOM_MIN).toBeLessThan(HIDE_BELOW);
   });
@@ -150,9 +140,7 @@ describe('computeGridDensity', () => {
     for (const zoom of visibleZooms) {
       const { worldStep } = computeGridDensity(zoom, DEFAULT_GRID_STEP);
       expect(isPowerOfTwoRatio(worldStep, DEFAULT_GRID_STEP)).toBe(true);
-      expect(worldStep).toBeLessThanOrEqual(
-        DEFAULT_GRID_STEP * MAX_STEP_SCALE + EPS,
-      );
+      expect(worldStep).toBeLessThanOrEqual(DEFAULT_GRID_STEP * MAX_STEP_SCALE + EPS);
     }
   });
 
@@ -271,9 +259,7 @@ describe('computeGridLayout', () => {
     const secondColumn = second.columns[0];
     expect(firstColumn).toBeDefined();
     expect(secondColumn).toBeDefined();
-    expect(isMultipleOf(secondColumn! - firstColumn!, first.worldStep)).toBe(
-      true,
-    );
+    expect(isMultipleOf(secondColumn! - firstColumn!, first.worldStep)).toBe(true);
   });
 
   it('накрывает всю видимую область, без прорех по краям', () => {
@@ -291,9 +277,7 @@ describe('computeGridLayout', () => {
           const lastRow = layout.rows[layout.rows.length - 1];
 
           expect(firstColumn!).toBeLessThanOrEqual(rect.x + EPS);
-          expect(lastColumn!).toBeGreaterThanOrEqual(
-            rect.x + rect.width - EPS,
-          );
+          expect(lastColumn!).toBeGreaterThanOrEqual(rect.x + rect.width - EPS);
           expect(firstRow!).toBeLessThanOrEqual(rect.y + EPS);
           expect(lastRow!).toBeGreaterThanOrEqual(rect.y + rect.height - EPS);
         }
@@ -303,10 +287,7 @@ describe('computeGridLayout', () => {
 
   it('на мелком зуме раскладка пустая — рисовать нечего', () => {
     for (const zoom of [ZOOM_MIN, 0.11, 0.02]) {
-      const layout = computeGridLayout(
-        { x: 0, y: 0, zoom },
-        { width: 1920, height: 1080 },
-      );
+      const layout = computeGridLayout({ x: 0, y: 0, zoom }, { width: 1920, height: 1080 });
 
       expect(layout.visible).toBe(false);
       expect(layout.count).toBe(0);
@@ -329,12 +310,8 @@ describe('computeGridLayout', () => {
     }
 
     const canvas: Size = { width: 1920, height: 1080 };
-    expect(
-      computeGridLayout({ x: Number.NaN, y: 0, zoom: 1 }, canvas).visible,
-    ).toBe(false);
-    expect(
-      computeGridLayout({ x: 0, y: 0, zoom: Number.NaN }, canvas).visible,
-    ).toBe(false);
+    expect(computeGridLayout({ x: Number.NaN, y: 0, zoom: 1 }, canvas).visible).toBe(false);
+    expect(computeGridLayout({ x: 0, y: 0, zoom: Number.NaN }, canvas).visible).toBe(false);
   });
 
   it('уважает переданный базовый шаг', () => {

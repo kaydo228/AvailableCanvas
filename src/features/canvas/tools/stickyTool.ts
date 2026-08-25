@@ -3,10 +3,7 @@
  */
 
 import type { Rect, Size, WorldPoint } from '@/features/canvas/engine/contract';
-import {
-  DEFAULT_STICKY_COLOR,
-  type StickyColor,
-} from '@/features/canvas/nodes/stickyPalette';
+import { DEFAULT_STICKY_COLOR, type StickyColor } from '@/features/canvas/nodes/stickyPalette';
 import type { StickyNode } from '@/shared/types/document';
 
 import { isClick, normalizeRect, rectAround } from './geometry';
@@ -67,11 +64,7 @@ export function stickyFromDrag(
   color: StickyColor = DEFAULT_STICKY_COLOR,
 ): StickyNode {
   if (isClick(start, current, zoom)) {
-    const rect = rectAround(
-      start,
-      DEFAULT_STICKY_SIZE.width,
-      DEFAULT_STICKY_SIZE.height,
-    );
+    const rect = rectAround(start, DEFAULT_STICKY_SIZE.width, DEFAULT_STICKY_SIZE.height);
     return createStickyNode(rect, color);
   }
 

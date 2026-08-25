@@ -13,9 +13,8 @@ import { NodesLayer } from '@/features/canvas/nodes/NodesLayer';
 import { PreviewNode } from '@/features/canvas/nodes/PreviewNode';
 import { useToolController } from '@/features/canvas/tools/useToolController';
 import { useBoardStore } from '@/shared/store/board';
-
-import { GridLayer } from './GridLayer';
 import type { Size } from './contract';
+import { GridLayer } from './GridLayer';
 import { useCanvasGestures } from './useCanvasGestures';
 
 const EMPTY_VIEWPORT = { x: 0, y: 0, zoom: 1 };
@@ -86,12 +85,7 @@ export function CanvasStage() {
         onMouseUp={tools.onMouseUp}
       >
         <GridLayer viewport={viewport} size={size} />
-        <Layer
-          x={viewport.x}
-          y={viewport.y}
-          scaleX={viewport.zoom}
-          scaleY={viewport.zoom}
-        >
+        <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
           <NodesLayer />
           <PreviewNode node={tools.preview} />
         </Layer>

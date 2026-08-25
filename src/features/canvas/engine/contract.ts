@@ -52,21 +52,13 @@ export type ClampZoom = (zoom: number) => number;
  * под курсором после изменения зума. Это главное требование зоны.
  * `factor` — множитель (1.1 приблизить, 0.9 отдалить).
  */
-export type ZoomAt = (
-  viewport: Viewport,
-  screenPoint: ScreenPoint,
-  factor: number,
-) => Viewport;
+export type ZoomAt = (viewport: Viewport, screenPoint: ScreenPoint, factor: number) => Viewport;
 
 /** Сдвиг вида на дельту в экранных пикселях. */
 export type PanBy = (viewport: Viewport, dx: number, dy: number) => Viewport;
 
 /** Вид, при котором прямоугольник мира вписан в канвас с отступом. */
-export type FitToBox = (
-  box: Rect,
-  canvas: Size,
-  padding?: number,
-) => Viewport;
+export type FitToBox = (box: Rect, canvas: Size, padding?: number) => Viewport;
 
 /** Прямоугольник мира, видимый сейчас. Нужен сетке и отсечению. */
 export type VisibleWorldRect = (viewport: Viewport, canvas: Size) => Rect;

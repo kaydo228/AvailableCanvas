@@ -83,8 +83,7 @@ const stepScaleFor = (screenGap: number): number => {
  * Мусор на входе (NaN, ноль, минус) — не исключение, а `visible: false`.
  */
 export const computeGridDensity: ComputeGridDensity = (zoom, baseStep) => {
-  const step =
-    Number.isFinite(baseStep) && baseStep > 0 ? baseStep : DEFAULT_GRID_STEP;
+  const step = Number.isFinite(baseStep) && baseStep > 0 ? baseStep : DEFAULT_GRID_STEP;
 
   if (!Number.isFinite(zoom) || zoom <= 0) {
     return { worldStep: step, visible: false };

@@ -9,13 +9,12 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-
+import type { Rect, Size } from '@/features/canvas/engine/contract';
 import {
   fitToBox,
   panBy as panViewportBy,
   zoomAt as zoomViewportAt,
 } from '@/features/canvas/engine/viewport';
-import type { Rect, Size } from '@/features/canvas/engine/contract';
 import type {
   Anchor,
   BoardDocument,
@@ -40,9 +39,7 @@ export type Tool =
   | 'pen'
   | 'image';
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 /** Частичное изменение узла. id и type менять нельзя. */
 export type NodePatch = Partial<DistributiveOmit<Node, 'id' | 'type'>>;
@@ -100,11 +97,7 @@ export interface BoardState {
   connect(from: Endpoint, to: Endpoint): Id;
   setConnectorRouting(id: Id, routing: ConnectorNode['routing']): void;
   /** Перевесить конец линии на другую фигуру или отвязать в точку. */
-  reattachEndpoint(
-    connectorId: Id,
-    which: 'from' | 'to',
-    endpoint: Endpoint,
-  ): void;
+  reattachEndpoint(connectorId: Id, which: 'from' | 'to', endpoint: Endpoint): void;
   setEndpointAnchor(connectorId: Id, which: 'from' | 'to', anchor: Anchor): void;
 
   // ─── Выделение ──────────────────────────────────────────────────────────
@@ -308,11 +301,7 @@ export const useBoardStore = create<BoardState>()(
     zoomAt: (screenPoint, factor) =>
       set((state) => {
         if (state.document) {
-          state.document.viewport = zoomViewportAt(
-            state.document.viewport,
-            screenPoint,
-            factor,
-          );
+          state.document.viewport = zoomViewportAt(state.document.viewport, screenPoint, factor);
         }
       }),
 
@@ -320,9 +309,7 @@ export const useBoardStore = create<BoardState>()(
       set((state) => {
         if (!state.document) return;
         const box = boundsOf(state.document, state.document.order);
-        state.document.viewport = box
-          ? fitToBox(box, state.canvasSize)
-          : { x: 0, y: 0, zoom: 1 };
+        state.document.viewport = box ? fitToBox(box, state.canvasSize) : { x: 0, y: 0, zoom: 1 };
       }),
 
     zoomToSelection: () =>
@@ -343,9 +330,7 @@ export const useBoardStore = create<BoardState>()(
 export const selectSelectedNodes = (state: BoardState): Node[] => {
   const doc = state.document;
   if (!doc) return [];
-  return state.selection
-    .map((id) => doc.nodes[id])
-    .filter((n): n is Node => n !== undefined);
+  return state.selection.map((id) => doc.nodes[id]).filter((n): n is Node => n !== undefined);
 };
 
 export const selectSelectedBoxNodes = (state: BoardState): BoxNode[] =>

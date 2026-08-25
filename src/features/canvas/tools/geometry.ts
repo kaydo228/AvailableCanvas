@@ -33,11 +33,7 @@ export function squareRect(a: WorldPoint, b: WorldPoint): Rect {
 }
 
 /** Рамка по умолчанию для одиночного клика: узел центрируется по точке. */
-export function rectAround(
-  point: WorldPoint,
-  width: number,
-  height: number,
-): Rect {
+export function rectAround(point: WorldPoint, width: number, height: number): Rect {
   return {
     x: point.x - width / 2,
     y: point.y - height / 2,
