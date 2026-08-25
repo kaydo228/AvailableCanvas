@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createTextNode,
   DEFAULT_FONT_SIZE,
   DEFAULT_TEXT_SIZE,
   MIN_TEXT_SIZE,
-  createTextNode,
   shouldRemoveOnBlur,
   textFromDrag,
 } from '@/features/canvas/tools/textTool';
@@ -74,14 +74,17 @@ describe('textFromDrag — обратная протяжка', () => {
 
 describe('shouldRemoveOnBlur — пустой блок удаляется сам', () => {
   const withText = (value: string) =>
-    createTextNode({ x: 0, y: 0, width: 100, height: 40 }, {
-      text: {
-        value,
-        fontSize: DEFAULT_FONT_SIZE,
-        color: '#000000',
-        align: 'left',
+    createTextNode(
+      { x: 0, y: 0, width: 100, height: 40 },
+      {
+        text: {
+          value,
+          fontSize: DEFAULT_FONT_SIZE,
+          color: '#000000',
+          align: 'left',
+        },
       },
-    });
+    );
 
   it('пустая строка — удалять', () => {
     expect(shouldRemoveOnBlur(withText(''))).toBe(true);
@@ -117,9 +120,7 @@ describe('инварианты модели для текстового узла
   });
 
   it('идентификаторы уникальны', () => {
-    const ids = new Set(
-      Array.from({ length: 50 }, () => textFromDrag(P(0, 0), P(10, 10), 1).id),
-    );
+    const ids = new Set(Array.from({ length: 50 }, () => textFromDrag(P(0, 0), P(10, 10), 1).id));
     expect(ids.size).toBe(50);
   });
 

@@ -8,13 +8,11 @@
  * ошибка «зумим по координатам окна вместо координат контейнера».
  */
 
-import { useState } from 'react';
-
 import { cleanup, createEvent, fireEvent, render } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-
-import { ZOOM_MAX, ZOOM_MIN } from '@/shared/types/document';
 import type { Viewport } from '@/shared/types/document';
+import { ZOOM_MAX, ZOOM_MIN } from '@/shared/types/document';
 
 import type { Size } from './contract';
 import { useCanvasGestures } from './useCanvasGestures';

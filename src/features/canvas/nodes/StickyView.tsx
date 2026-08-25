@@ -6,9 +6,9 @@
  * внутри в экранные ничего не пересчитывается.
  */
 
+import type Konva from 'konva';
 import { useMemo } from 'react';
 import { Group, Rect, Text } from 'react-konva';
-import type Konva from 'konva';
 
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
 import { fitFontSize, measureWithCanvas } from '@/features/canvas/nodes/fitText';

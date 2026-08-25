@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-
-import { fitFontSize, MIN_FONT_SIZE } from '@/features/canvas/nodes/fitText';
 import type { MeasureText } from '@/features/canvas/nodes/fitText';
+import { fitFontSize, MIN_FONT_SIZE } from '@/features/canvas/nodes/fitText';
 import { STICKY_PALETTE } from '@/features/canvas/nodes/stickyPalette';
 import {
   DEFAULT_STICKY_FONT_SIZE,
@@ -149,8 +148,9 @@ describe('fitFontSize — текст ужимается под рамку', () =
       });
 
       if (!overflow) {
-        expect(measure('а'.repeat(length), fontSize, box.maxWidth).height)
-          .toBeLessThanOrEqual(box.maxHeight);
+        expect(measure('а'.repeat(length), fontSize, box.maxWidth).height).toBeLessThanOrEqual(
+          box.maxHeight,
+        );
       }
     }
   });

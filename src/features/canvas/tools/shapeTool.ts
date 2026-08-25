@@ -12,12 +12,7 @@
  */
 
 import type { Rect, WorldPoint } from '@/features/canvas/engine/contract';
-import {
-  isClick,
-  normalizeRect,
-  rectAround,
-  squareRect,
-} from '@/features/canvas/tools/geometry';
+import { isClick, normalizeRect, rectAround, squareRect } from '@/features/canvas/tools/geometry';
 import type { ShapeNode } from '@/shared/types/document';
 
 /** Пять форм MVP из FR-03. Синоним, чтобы не писать `ShapeNode['shape']` везде. */
@@ -101,9 +96,7 @@ export function shapeFromDrag(
     );
   }
 
-  const rect = shiftKey
-    ? squareRect(start, current)
-    : normalizeRect(start, current);
+  const rect = shiftKey ? squareRect(start, current) : normalizeRect(start, current);
 
   return createShapeNode(rect, shape);
 }

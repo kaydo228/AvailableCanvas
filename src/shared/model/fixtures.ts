@@ -1,12 +1,6 @@
 /** Фикстуры для тестов инвариантов. */
 
-import type {
-  BoardDocument,
-  ConnectorNode,
-  Id,
-  Node,
-  ShapeNode,
-} from '@/shared/types/document';
+import type { BoardDocument, ConnectorNode, Id, Node, ShapeNode } from '@/shared/types/document';
 
 export function shape(id: Id, x = 0, y = 0): ShapeNode {
   return {

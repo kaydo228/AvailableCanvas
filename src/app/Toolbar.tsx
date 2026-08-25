@@ -4,8 +4,8 @@
  * инструменты и видеть, что они работают.
  */
 
-import { useBoardStore } from '@/shared/store/board';
 import type { Tool } from '@/shared/store/board';
+import { useBoardStore } from '@/shared/store/board';
 
 const TOOLS: Array<{ id: Tool; label: string; hotkey: string }> = [
   { id: 'select', label: 'Выбор', hotkey: 'V' },
