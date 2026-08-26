@@ -6,7 +6,7 @@
  */
 
 import type Konva from 'konva';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Group, Image as KonvaImage, Rect } from 'react-konva';
 
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
@@ -17,7 +17,7 @@ const SELECTION_STROKE = '#2f6fed';
 const SELECTION_STROKE_WIDTH = 1.5;
 const PLACEHOLDER_FILL = '#eef0f3';
 
-export function ImageView({
+function ImageViewInner({
   node,
   selected,
   onSelect,
@@ -83,3 +83,9 @@ export function ImageView({
     </Group>
   );
 }
+
+/**
+ * Мемоизация: при перетаскивании стор обновляется каждый кадр,
+ * и без неё перерисовывались бы все узлы доски, а не только сдвинутый.
+ */
+export const ImageView = memo(ImageViewInner);

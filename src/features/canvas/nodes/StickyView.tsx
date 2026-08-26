@@ -7,7 +7,7 @@
  */
 
 import type Konva from 'konva';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Group, Rect, Text } from 'react-konva';
 
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
@@ -21,7 +21,7 @@ const CORNER_RADIUS = 4;
 const SELECTION_STROKE = '#2f6fed';
 const SELECTION_STROKE_WIDTH = 1.5;
 
-export function StickyView({
+function StickyViewInner({
   node,
   selected,
   editing,
@@ -117,3 +117,9 @@ export function StickyView({
     </Group>
   );
 }
+
+/**
+ * Мемоизация: при перетаскивании стор обновляется каждый кадр,
+ * и без неё перерисовывались бы все узлы доски, а не только сдвинутый.
+ */
+export const StickyView = memo(StickyViewInner);

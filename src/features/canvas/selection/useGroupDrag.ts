@@ -54,14 +54,30 @@ export function useGroupDrag() {
   }, []);
 
   const onDragMove = useCallback((event: Konva.KonvaEventObject<DragEvent>) => {
+    const id = event.target.id();
+    if (!id) return;
+
+    const { updateNode } = useBoardStore.getState();
     const snap = snapshot.current;
-    if (!snap || event.target.id() !== snap.anchorId) return;
+
+    if (!snap || id !== snap.anchorId) {
+      // Одиночное перетаскивание: пишем позицию в стор каждый кадр, иначе
+      // привязанные линии догоняют фигуру только на отпускании и дёргаются.
+      updateNode(id, { x: event.target.x(), y: event.target.y() });
+      return;
+    }
 
     const dx = event.target.x() - snap.anchor.x;
     const dy = event.target.y() - snap.anchor.y;
 
+    updateNode(id, { x: event.target.x(), y: event.target.y() });
+
     for (const item of snap.others) {
-      item.node.position({ x: item.x + dx, y: item.y + dy });
+      const position = { x: item.x + dx, y: item.y + dy };
+      // Konva двигаем сами: узел не перетаскивается, он ведомый.
+      item.node.position(position);
+      const otherId = item.node.id();
+      if (otherId) updateNode(otherId, position);
     }
   }, []);
 

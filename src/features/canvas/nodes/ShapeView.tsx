@@ -13,6 +13,7 @@
  */
 
 import type Konva from 'konva';
+import { memo } from 'react';
 import { Ellipse, Group, Line, Rect, Text } from 'react-konva';
 
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
@@ -42,7 +43,7 @@ function polygonPoints(shape: 'triangle' | 'diamond', width: number, height: num
   return [width / 2, 0, width, height / 2, width / 2, height, 0, height / 2];
 }
 
-export function ShapeView({
+function ShapeViewInner({
   node,
   selected,
   editing,
@@ -170,3 +171,9 @@ function fontStyleOf(label: NonNullable<ShapeNode['label']>): string {
   if (label.italic) return 'italic';
   return 'normal';
 }
+
+/**
+ * Мемоизация: при перетаскивании стор обновляется каждый кадр,
+ * и без неё перерисовывались бы все узлы доски, а не только сдвинутый.
+ */
+export const ShapeView = memo(ShapeViewInner);

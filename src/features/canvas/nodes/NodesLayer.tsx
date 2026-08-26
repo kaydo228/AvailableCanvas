@@ -6,7 +6,7 @@
  * цепочкой if по типам.
  */
 
-import type { ComponentType } from 'react';
+import { type ComponentType, useCallback } from 'react';
 import { Group } from 'react-konva';
 import { ConnectorView } from '@/features/canvas/connectors/ConnectorView';
 import { useGroupDrag } from '@/features/canvas/selection/useGroupDrag';
@@ -43,6 +43,21 @@ export function NodesLayer() {
   const groupDrag = useGroupDrag();
   const activeTool = useBoardStore((s) => s.activeTool);
 
+  /*
+   * Колбэки стабильные: без этого memo на рендерерах бесполезен —
+   * новая функция на каждый рендер слоя считается изменившимся пропом,
+   * и перерисовываются все узлы разом.
+   */
+  const handleSelect = useCallback(
+    (nodeId: string, additive: boolean) => (additive ? addToSelection([nodeId]) : select([nodeId])),
+    [addToSelection, select],
+  );
+
+  const handleDragEnd = useCallback(
+    (nodeId: string, x: number, y: number) => updateNode(nodeId, { x, y }),
+    [updateNode],
+  );
+
   if (!document) return null;
 
   const selected = new Set(selection);
@@ -75,11 +90,9 @@ export function NodesLayer() {
             node={node}
             selected={selected.has(id)}
             editing={editingNodeId === id}
-            onSelect={(nodeId, additive) =>
-              additive ? addToSelection([nodeId]) : select([nodeId])
-            }
+            onSelect={handleSelect}
             onStartEditing={startEditing}
-            onDragEnd={(nodeId, x, y) => updateNode(nodeId, { x, y })}
+            onDragEnd={handleDragEnd}
           />
         );
       })}

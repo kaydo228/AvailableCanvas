@@ -95,7 +95,7 @@ export function SelectionTransformer() {
     applyAspectRule();
   }, [selection, nodes, editingNodeId, applyAspectRule]);
 
-  const commit = () => {
+  const commit = (_event?: unknown) => {
     const transformer = ref.current;
     const document = useBoardStore.getState().document;
     if (!transformer || !document) return;
@@ -142,7 +142,13 @@ export function SelectionTransformer() {
       borderStroke="#2f6fed"
       anchorStroke="#2f6fed"
       onTransformStart={applyAspectRule}
-      onTransform={applyAspectRule}
+      onTransform={(event) => {
+        applyAspectRule();
+        // Размер уезжает в стор на каждом кадре, а не только на отпускании:
+        // иначе привязанные линии стоят на месте всё время растягивания
+        // и прыгают в конце.
+        commit(event);
+      }}
       onTransformEnd={commit}
       boundBoxFunc={(oldBox, newBox) =>
         newBox.width < MIN_NODE_SIDE || newBox.height < MIN_NODE_SIDE ? oldBox : newBox
