@@ -23,6 +23,7 @@ import {
   bringToFront as reorderToFront,
 } from '@/features/canvas/selection/layerOrder';
 import { nodesInBox } from '@/features/canvas/selection/marquee';
+import { removeNodes as removeNodesFromDocument } from '@/shared/model/operations';
 import type {
   Anchor,
   BoardDocument,
@@ -203,9 +204,11 @@ export const useBoardStore = create<BoardState>()(
     removeNodes: (ids) =>
       set((state) => {
         if (!state.document) return;
+        // Инвариант 4 живёт в operations.removeNode: он отвязывает концы
+        // коннекторов, считая координаты ДО удаления узла.
+        state.document = removeNodesFromDocument(state.document, ids);
+
         const doomed = new Set(ids);
-        for (const id of doomed) delete state.document.nodes[id];
-        state.document.order = state.document.order.filter((id) => !doomed.has(id));
         state.selection = state.selection.filter((id) => !doomed.has(id));
         if (state.editingNodeId && doomed.has(state.editingNodeId)) {
           state.editingNodeId = null;
