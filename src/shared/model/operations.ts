@@ -2,7 +2,13 @@
  * Чистые операции над документом. Стор их вызывает, сам логику не держит.
  */
 
-import { connectorEnds, pointEndpoint } from '@/features/canvas/connectors/geometry';
+import {
+  centerOf,
+  connectorEnds,
+  pointEndpoint,
+  referencePoint,
+  resolveEndpoint,
+} from '@/features/canvas/connectors/geometry';
 import type { BoardDocument, Id, Node } from '@/shared/types/document';
 
 export function addNode(document: BoardDocument, node: Node): BoardDocument {
@@ -23,10 +29,28 @@ export function addNode(document: BoardDocument, node: Node): BoardDocument {
  * ещё в документе. После удаления считать уже не от чего, и конец пришлось бы
  * ставить в ноль — линия прыгнула бы в начало координат.
  */
-export function removeNode(document: BoardDocument, nodeId: Id): BoardDocument {
-  if (!document.nodes[nodeId]) return document;
+/** Конечная точка или ноль: NaN в модели дороже неточной координаты. */
+const finitePoint = (p: { x: number; y: number }): { x: number; y: number } => ({
+  x: Number.isFinite(p.x) ? p.x : 0,
+  y: Number.isFinite(p.y) ? p.y : 0,
+});
 
-  const nodes: Record<Id, Node> = {};
+export function removeNode(document: BoardDocument, nodeId: Id): BoardDocument {
+  const doomed = document.nodes[nodeId];
+
+  // Узла нет, но мусорная запись в order могла остаться от битого импорта —
+  // вычищаем её и здесь, иначе инвариант 1 не восстановить ничем.
+  if (!doomed) {
+    if (!document.order.includes(nodeId)) return document;
+    return { ...document, order: document.order.filter((id) => id !== nodeId) };
+  }
+
+  /*
+   * Object.create(null), а не {}: узел с id `__proto__` при обычном
+   * присваивании уходит в сеттер прототипа и молча пропадает из nodes,
+   * оставаясь в order. Такой id приходит из импортированного документа.
+   */
+  const nodes = Object.create(null) as Record<Id, Node>;
 
   for (const [id, node] of Object.entries(document.nodes)) {
     if (id === nodeId) continue;
@@ -47,16 +71,39 @@ export function removeNode(document: BoardDocument, nodeId: Id): BoardDocument {
     // Считаем от исходного документа: удаляемый узел ещё на месте.
     const ends = connectorEnds(node, document);
 
+    /**
+     * Запасной расчёт для случая, когда ВТОРОЙ конец не разрешается —
+     * например, он уже висит на несуществующем узле после битого импорта.
+     * Раньше `ends === null` отменял отвязку обоих концов сразу, и узел
+     * оставался в модели висячей ссылкой навсегда: линия не рисуется,
+     * починить нечем, и всё это уезжает в IndexedDB.
+     */
+    const detached = (which: 'from' | 'to'): { x: number; y: number } => {
+      if (ends) return ends[which];
+
+      const other = which === 'from' ? node.to : node.from;
+      const toward =
+        referencePoint(other, document) ??
+        (doomed.type !== 'connector' ? centerOf(doomed) : { x: 0, y: 0 });
+
+      return (
+        resolveEndpoint(node[which], document, toward) ??
+        (doomed.type !== 'connector' ? centerOf(doomed) : { x: 0, y: 0 })
+      );
+    };
+
     nodes[id] = {
       ...node,
-      ...(touchesFrom && ends ? { from: pointEndpoint(ends.from) } : {}),
-      ...(touchesTo && ends ? { to: pointEndpoint(ends.to) } : {}),
+      ...(touchesFrom ? { from: pointEndpoint(finitePoint(detached('from'))) } : {}),
+      ...(touchesTo ? { to: pointEndpoint(finitePoint(detached('to'))) } : {}),
     };
   }
 
   return {
     ...document,
-    nodes,
+    // Обратно в обычный объект: Object.create(null) ломает сериализацию
+    // и сравнение в тестах, а защита нужна была только на время сборки.
+    nodes: { ...nodes },
     order: document.order.filter((id) => id !== nodeId),
   };
 }
