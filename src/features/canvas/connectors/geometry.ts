@@ -63,6 +63,11 @@ export function anchorPoint(node: BoxNode, anchor: SideAnchor): WorldPoint {
       return { x: node.x, y: cy };
     case 'right':
       return { x: node.x + node.width, y: cy };
+    default:
+      // Значение вне типа приходит из импортированного документа: типы там
+      // никто не проверял. Без этой ветки switch возвращает undefined,
+      // и обращение к `.x` роняет весь слой, а не одну линию.
+      return { x: cx, y: cy };
   }
 }
 
@@ -124,8 +129,15 @@ export function resolveEndpoint(
   const node = boxNode(document, endpoint.nodeId);
   if (!node) return null;
 
+  /*
+   * Неизвестное значение ведёт себя как `auto` — ТАК ЖЕ, как в routing.ts.
+   * Раньше здесь был откат на центр рамки, а там на автоподбор стороны:
+   * линия рисовалась из якоря, а при удалении фигуры конец отвязывался
+   * в центр, то есть прыгал. Два отката на один случай — всегда расхождение.
+   */
   const anchor = endpoint.anchor ?? 'auto';
-  const side = anchor === 'auto' ? autoAnchor(node, toward) : anchor;
+  const known = SIDE_ANCHORS.includes(anchor as SideAnchor);
+  const side: SideAnchor = known ? (anchor as SideAnchor) : autoAnchor(node, toward);
   return anchorPoint(node, side);
 }
 
