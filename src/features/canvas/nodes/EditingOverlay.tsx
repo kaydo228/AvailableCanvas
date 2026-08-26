@@ -6,10 +6,16 @@
  * зарастает невидимыми узлами (см. shouldRemoveOnBlur в textTool).
  */
 
+import { routeMidpoint } from '@/features/canvas/connectors/labelPosition';
+import { connectorPoints, isBezier } from '@/features/canvas/connectors/routing';
 import { STICKY_PADDING } from '@/features/canvas/nodes/StickyView';
 import { TextOverlay } from '@/features/canvas/nodes/TextOverlay';
 import { shouldRemoveOnBlur } from '@/features/canvas/tools/textTool';
 import { useBoardStore } from '@/shared/store/board';
+
+/** Искусственная рамка под ввод подписи коннектора, в мировых единицах. */
+const LABEL_WIDTH = 160;
+const LABEL_HEIGHT = 28;
 
 export function EditingOverlay() {
   const editingNodeId = useBoardStore((s) => s.editingNodeId);
@@ -23,9 +29,49 @@ export function EditingOverlay() {
   const node = document.nodes[editingNodeId];
   if (!node) return null;
 
-  // У коннектора нет рамки, а у картинки нет текста — оверлей им не нужен.
-  if (node.type === 'connector' || node.type === 'image' || node.type === 'draw') {
-    return null;
+  // У картинки нет текста — оверлею нечего показывать.
+  if (node.type === 'image' || node.type === 'draw') return null;
+
+  /*
+   * Коннектор идёт отдельной веткой: у него нет рамки, он единственный
+   * не наследует BaseNode. Оверлею подсовывается искусственная рамка
+   * вокруг середины маршрута — TextOverlay использует box только для
+   * позиции и размера поля и «настоящести» не требует.
+   */
+  if (node.type === 'connector') {
+    const points = connectorPoints(node, document);
+    if (!points) return null;
+
+    const at = routeMidpoint(points, isBezier(node, points));
+    const style = node.label ?? {
+      value: '',
+      fontSize: 14,
+      color: '#111827',
+      align: 'center' as const,
+    };
+
+    return (
+      <TextOverlay
+        box={{
+          x: at.x - LABEL_WIDTH / 2,
+          y: at.y - LABEL_HEIGHT / 2,
+          width: LABEL_WIDTH,
+          height: LABEL_HEIGHT,
+        }}
+        viewport={document.viewport}
+        style={style}
+        verticalAlign="center"
+        padding={0}
+        onCommit={(value) => {
+          // Пустое значение НЕ удаляет ключ: exactOptionalPropertyTypes
+          // и решение зоны B «панель никогда не удаляет ключ». Пустая
+          // подпись просто не рисуется — см. ConnectorLabel.
+          updateNode(node.id, { label: { ...style, value } });
+          stopEditing();
+        }}
+        onCancel={stopEditing}
+      />
+    );
   }
 
   const style =
