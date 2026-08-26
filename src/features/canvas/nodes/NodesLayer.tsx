@@ -8,7 +8,7 @@
 
 import type { ComponentType } from 'react';
 import { Group } from 'react-konva';
-
+import { ConnectorView } from '@/features/canvas/connectors/ConnectorView';
 import { useGroupDrag } from '@/features/canvas/selection/useGroupDrag';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
@@ -29,6 +29,7 @@ const RENDERERS = {
   text: TextView,
   sticky: StickyView,
   image: ImageView,
+  connector: ConnectorView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
 
 export function NodesLayer() {
@@ -40,6 +41,7 @@ export function NodesLayer() {
   const startEditing = useBoardStore((s) => s.startEditing);
   const updateNode = useBoardStore((s) => s.updateNode);
   const groupDrag = useGroupDrag();
+  const activeTool = useBoardStore((s) => s.activeTool);
 
   if (!document) return null;
 
@@ -49,6 +51,13 @@ export function NodesLayer() {
     // Обёртка нужна, чтобы поймать всплывающие события перетаскивания
     // от любого узла: рендереры про выделение не знают.
     <Group
+      /*
+       * Узлы слушают мышь только под «Выбором». Иначе протяжка инструментом
+       * «Линия», начатая на фигуре, тянет саму фигуру: Konva видит нажатие
+       * на draggable-узле раньше, чем до события доходит инструмент.
+       * Поймано вживую — линия рисовалась, но фигура при этом уезжала.
+       */
+      listening={activeTool === 'select'}
       onDragStart={groupDrag.onDragStart}
       onDragMove={groupDrag.onDragMove}
       onDragEnd={groupDrag.onDragEnd}
