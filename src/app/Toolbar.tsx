@@ -1,7 +1,9 @@
 /**
- * Временная панель инструментов для проверки движка руками.
- * Настоящую панель делает зона B — здесь минимум, чтобы переключать
- * инструменты и видеть, что они работают.
+ * Панель инструментов холста (6.1).
+ *
+ * Плавающая планка поверх доски: инструменты слева, показания справа —
+ * зум и число объектов набраны моноширинным, потому что это измерения,
+ * а не подписи. Сам холст об этой панели ничего не знает.
  */
 
 import type { Tool } from '@/shared/store/board';
@@ -17,6 +19,10 @@ const TOOLS: Array<{ id: Tool; label: string; hotkey: string }> = [
   { id: 'diamond', label: 'Ромб', hotkey: 'D' },
 ];
 
+const BTN =
+  'rounded-sm px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-2 ' +
+  'focus-visible:outline-offset-2 focus-visible:outline-accent';
+
 export function Toolbar() {
   const activeTool = useBoardStore((s) => s.activeTool);
   const setTool = useBoardStore((s) => s.setTool);
@@ -25,53 +31,34 @@ export function Toolbar() {
   const count = useBoardStore((s) => s.document?.order.length ?? 0);
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: 16,
-        left: 16,
-        zIndex: 10,
-        display: 'flex',
-        gap: 4,
-        padding: 6,
-        borderRadius: 10,
-        background: '#ffffff',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontSize: 13,
-      }}
-    >
+    <div className="absolute top-4 left-4 z-10 flex items-center gap-0.5 rounded-lg border border-rule bg-sheet p-1 shadow-pop">
       {TOOLS.map((tool) => (
         <button
           key={tool.id}
           type="button"
           onClick={() => setTool(tool.id)}
           title={`${tool.label} (${tool.hotkey})`}
-          style={{
-            padding: '6px 10px',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-            background: activeTool === tool.id ? '#2f6fed' : '#f1f3f5',
-            color: activeTool === tool.id ? '#ffffff' : '#111827',
-          }}
+          aria-pressed={activeTool === tool.id}
+          className={`${BTN} ${
+            activeTool === tool.id
+              ? 'bg-accent text-accent-ink'
+              : 'text-pencil hover:bg-well hover:text-ink'
+          }`}
         >
           {tool.label}
         </button>
       ))}
-      <span style={{ alignSelf: 'center', padding: '0 8px', color: '#6b7280' }}>
-        {Math.round(zoom * 100)}% · узлов: {count}
+
+      <span className="mx-1.5 h-5 w-px bg-rule" aria-hidden="true" />
+
+      <span className="px-1 font-mono text-faint text-micro tabular-nums">
+        {Math.round(zoom * 100)}% · {count}
       </span>
+
       <button
         type="button"
         onClick={zoomToFit}
-        style={{
-          padding: '6px 10px',
-          border: 'none',
-          borderRadius: 6,
-          cursor: 'pointer',
-          background: '#f1f3f5',
-        }}
+        className={`${BTN} text-pencil hover:bg-well hover:text-ink`}
       >
         Вписать
       </button>

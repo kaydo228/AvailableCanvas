@@ -20,7 +20,7 @@ import { TriangleAlert } from 'lucide-react';
 import { AlertDialog, Dialog } from 'radix-ui';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
 
 import {
   createProject,
@@ -31,26 +31,28 @@ import {
 } from '@/features/persistence';
 import { useProjectDialogs } from '@/features/projects/dialogsStore';
 import type { Id } from '@/shared/types/document';
+import { AppToaster } from '@/shared/ui';
 
 const DEFAULT_NAME = 'Новый проект';
 
-const OVERLAY = 'fixed inset-0 z-40 bg-black/30';
+const OVERLAY = 'fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]';
 const CONTENT =
-  'fixed left-1/2 top-1/2 z-50 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 ' +
-  '-translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none';
-const TITLE = 'text-base font-semibold tracking-tight text-gray-900';
-const DESCRIPTION = 'mt-2 text-sm leading-relaxed text-gray-600';
-const FOOTER = 'mt-6 flex justify-end gap-2';
+  'fixed left-1/2 top-1/2 z-50 w-[min(27rem,calc(100vw-2rem))] -translate-x-1/2 ' +
+  '-translate-y-1/2 rounded-lg border border-rule bg-sheet p-6 shadow-pop focus:outline-none';
+const TITLE = 'text-[0.9375rem] font-semibold tracking-tight text-ink';
+const DESCRIPTION = 'mt-2 text-sm leading-relaxed text-pencil';
+const FOOTER = 'mt-7 flex justify-end gap-2';
 const INPUT =
-  'mt-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 ' +
-  'outline-none focus:border-[#2f6fed] focus:ring-2 focus:ring-[#2f6fed]/20';
+  'mt-5 w-full rounded-md border border-rule-strong bg-paper px-3 py-2 text-sm text-ink ' +
+  'outline-none transition-colors focus:border-accent focus:bg-sheet';
 
 const BTN =
-  'rounded-lg px-4 py-2 text-sm font-medium transition-colors ' +
+  'rounded-md px-4 py-2 text-sm font-medium transition-colors ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ' +
   'disabled:cursor-not-allowed disabled:opacity-50';
-const BTN_GHOST = `${BTN} text-gray-700 hover:bg-gray-100`;
-const BTN_PRIMARY = `${BTN} bg-[#2f6fed] text-white hover:bg-[#255ccc]`;
-const BTN_DANGER = `${BTN} bg-[#dc2626] text-white hover:bg-[#b91c1c]`;
+const BTN_GHOST = `${BTN} text-pencil hover:bg-well hover:text-ink`;
+const BTN_PRIMARY = `${BTN} bg-accent text-accent-ink hover:bg-accent-hover`;
+const BTN_DANGER = `${BTN} bg-signal text-white hover:opacity-90`;
 
 /**
  * Одна попытка записи за раз. Ref, а не только state: два клика подряд успевают
@@ -256,7 +258,7 @@ function DeleteDialog({ projectId }: { projectId: Id }) {
         <AlertDialog.Overlay className={OVERLAY} />
         <AlertDialog.Content className={CONTENT}>
           <div className="flex gap-3">
-            <TriangleAlert className="mt-0.5 shrink-0 text-[#dc2626]" size={20} aria-hidden />
+            <TriangleAlert className="mt-0.5 shrink-0 text-signal" size={20} aria-hidden />
             <div>
               <AlertDialog.Title className={TITLE}>Удалить проект «{name}»?</AlertDialog.Title>
               <AlertDialog.Description className={DESCRIPTION}>
@@ -310,7 +312,7 @@ export const ProjectDialogs = () => {
       {kind === 'rename' && projectId && <RenameDialog projectId={projectId} />}
       {kind === 'duplicate' && projectId && <DuplicateDialog projectId={projectId} />}
       {kind === 'delete' && projectId && <DeleteDialog projectId={projectId} />}
-      <Toaster position="bottom-right" richColors closeButton />
+      <AppToaster />
     </>
   );
 };

@@ -14,6 +14,7 @@
 import { useEffect } from 'react';
 import { tinykeys } from 'tinykeys';
 
+import { redo, undo } from '@/features/history';
 import { useBoardStore } from '@/shared/store/board';
 import { isTyping, isTypingTarget } from '../lib/typing';
 import { activeShortcuts, type ShortcutActions } from './bindings';
@@ -25,6 +26,8 @@ export const useShortcuts = (): void => {
 
     const actions: ShortcutActions = {
       setTool: (tool) => board.getState().setTool(tool as never),
+      undo,
+      redo,
       removeNodes: (ids) => board.getState().removeNodes(ids),
       selectAll: () => board.getState().selectAll(),
       clearSelection: () => board.getState().clearSelection(),

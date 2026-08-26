@@ -9,15 +9,17 @@
 import { ChevronLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
-
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage } from '@/features/canvas/engine/CanvasStage';
+import { ExportMenu } from '@/features/export';
+import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
 import { getDocument, getProject } from '@/features/persistence';
 import { useAutosave } from '@/features/persistence/autosave';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
 import { HelpDialog, useShortcuts } from '@/features/shortcuts';
 import { useBoardStore } from '@/shared/store/board';
+import { AppToaster, ThemeToggle } from '@/shared/ui';
 
 /** `undefined` — ещё грузим, `null` — такого проекта нет. */
 type LoadState = { name: string } | null | undefined;
@@ -30,6 +32,9 @@ export function CanvasScreen() {
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
   useAutosave();
+
+  // История отмен (FR-10). Своя у каждого проекта, чистится на входе и выходе.
+  useHistorySession();
 
   // Горячие клавиши (6.2, 6.3). Живут только на холсте: в списке проектов
   // буква «S» должна печататься в поиске, а не ставить стикер.
@@ -51,6 +56,9 @@ export function CanvasScreen() {
         return;
       }
       loadDocument(document);
+      // Открытие проекта — не действие пользователя. Без явной чистки первый
+      // Cmd+Z откатывал бы саму загрузку: доска на секунду становилась пустой.
+      clearHistory();
       setState({ name: project.name });
     });
 
@@ -63,24 +71,32 @@ export function CanvasScreen() {
 
   if (state === undefined) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#fbfbfd] text-sm text-gray-500">
+      <div className="grid h-screen place-items-center bg-paper font-mono text-faint text-micro">
         Открываем проект…
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[#fbfbfd]">
-      <header className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-2.5">
+    <div className="flex h-screen flex-col bg-paper">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-rule border-b bg-sheet px-4">
         <Link
           to="/"
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          className="-ml-1 inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-pencil text-sm transition-colors hover:bg-well hover:text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
         >
           <ChevronLeft size={16} aria-hidden />
           Назад к списку
         </Link>
-        <span className="truncate text-sm font-medium text-gray-900">{state.name}</span>
+
+        <span className="h-4 w-px shrink-0 bg-rule" aria-hidden="true" />
+
+        <span className="min-w-0 truncate font-medium text-ink text-sm">{state.name}</span>
         <SaveIndicator />
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <ThemeToggle />
+          <ExportMenu name={state.name} />
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -92,6 +108,9 @@ export function CanvasScreen() {
       </div>
 
       <HelpDialog />
+      {/* Свой Toaster: ошибки экспорта показывает этот экран, а тот, что
+          в ProjectDialogs, живёт на другом маршруте. */}
+      <AppToaster />
     </div>
   );
 }

@@ -18,6 +18,9 @@ const openBoard = async (page: import('@playwright/test').Page) => {
   await page.getByLabel('Имя проекта').fill('Клавиши');
   await page.getByRole('button', { name: 'Создать' }).click();
   await expect(page).toHaveURL(/\/p\/[\w-]+$/);
+  // Холст появляется только когда экран догрузил документ из IndexedDB.
+  // Класть фикстуру раньше бесполезно: та загрузка приедет и затрёт её.
+  await expect(page.locator('canvas').first()).toBeVisible();
 
   await page.evaluate(() => {
     const board = window.__board;
@@ -58,7 +61,9 @@ const openBoard = async (page: import('@playwright/test').Page) => {
   });
   // Клик по холсту не нужен и вреден: Konva кладёт два канваса друг на друга,
   // верхний перехватывает pointer. После загрузки фокус и так на body.
-  await expect(page.locator('canvas').first()).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.__board.getState().document?.order.length ?? 0))
+    .toBe(2);
 };
 
 const state = (page: import('@playwright/test').Page) =>
@@ -203,12 +208,22 @@ test('клавиши поверх заглушек стора не вешают�
   expect((await state(page)).nodeCount, 'документ не изменился').toBe(2);
 });
 
-test('Cmd+Z не перехватывается, пока истории нет', async ({ page }) => {
+test('Cmd+Z отменяет действие, Shift+Cmd+Z возвращает (FR-10)', async ({ page }) => {
   await openBoard(page);
+  // Фикстура приезжает через loadDocument прямо в стор, в обход экрана, —
+  // для истории это правка, а не открытие проекта, и она даёт свой шаг.
+  // Ждём, пока он закроется, иначе удаление приклеится к нему.
+  await page.waitForTimeout(600);
+
   await page.evaluate(() => window.__board.getState().select(['s1']));
 
-  // Отмены в сторе ещё нет (FR-10). Перехватить и молча ничего не сделать —
-  // хуже, чем не перехватывать: пользователь решит, что отмена сломана.
+  await page.keyboard.press('Delete');
+  expect((await state(page)).nodeCount, 'узел удалён').toBe(1);
+
+  // Шаг истории закрывается паузой после последнего изменения: пока она идёт,
+  // отменять нечего. Ждём чуть дольше дебаунса.
+  await page.waitForTimeout(600);
+
   await page.evaluate(() => {
     window.__zPrevented = null;
     window.addEventListener('keydown', (event) => {
@@ -217,7 +232,27 @@ test('Cmd+Z не перехватывается, пока истории нет'
   });
 
   await page.keyboard.press('ControlOrMeta+z');
-  const defaultPrevented = await page.evaluate(() => window.__zPrevented);
 
-  expect(defaultPrevented).not.toBe(true);
+  expect((await state(page)).order, 'узел вернулся на своё место в порядке').toEqual(['s1', 'k1']);
+  // Отмену обязаны перехватить: иначе поверх нашей сработает браузерная.
+  expect(await page.evaluate(() => window.__zPrevented)).toBe(true);
+
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  expect((await state(page)).nodeCount, 'возврат снова удалил узел').toBe(1);
+});
+
+test('лишние Cmd+Z и Shift+Cmd+Z не роняют доску', async ({ page }) => {
+  await openBoard(page);
+  await page.waitForTimeout(600);
+
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  // Отменять больше, чем было сделано, — обычное дело: пользователь жмёт
+  // Cmd+Z до упора. Дно стека должно быть тихим, а не исключением.
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ControlOrMeta+z');
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ControlOrMeta+Shift+z');
+
+  expect(errors).toEqual([]);
+  expect((await state(page)).nodeCount, 'доска вернулась в исходное').toBe(2);
 });

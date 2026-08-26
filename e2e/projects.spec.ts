@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('пустое состояние: заголовок, пояснение и кнопка вместо пустой сетки', async ({ page }) => {
-  await expect(page.getByRole('heading', { name: 'Здесь пока пусто' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Чистый лист без края' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Создать проект' })).toHaveCount(2); // шапка и центр
 });
 

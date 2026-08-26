@@ -21,11 +21,9 @@ const format = (n: number): string => String(Math.round(n * 100) / 100);
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border-b border-neutral-200 px-3 py-3 last:border-b-0">
-      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
-        {title}
-      </h3>
-      <div className="flex flex-col gap-2">{children}</div>
+    <section className="border-rule border-b px-4 py-4 last:border-b-0">
+      <h3 className="label-caps mb-3 text-faint">{title}</h3>
+      <div className="flex flex-col gap-2.5">{children}</div>
     </section>
   );
 }
@@ -47,7 +45,7 @@ export function Row({
     // из подписи и текста всех соседей — «СеткаТочкиЛинииБез сетки».
     return (
       <fieldset className="min-w-0 text-xs">
-        <legend className="mb-1 text-neutral-500">{label}</legend>
+        <legend className="mb-1.5 text-pencil">{label}</legend>
         {children}
       </fieldset>
     );
@@ -55,7 +53,7 @@ export function Row({
 
   return (
     <Label.Root className="flex items-center gap-2 text-xs">
-      <span className="w-20 shrink-0 text-neutral-500">{label}</span>
+      <span className="w-20 shrink-0 text-pencil">{label}</span>
       <span className="min-w-0 flex-1">{children}</span>
     </Label.Root>
   );
@@ -101,10 +99,10 @@ export function NumberField({
   };
 
   return (
-    <div className="flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2 py-1 focus-within:border-neutral-400">
+    <div className="flex items-center gap-1 rounded-sm border border-rule bg-paper px-2 py-1.5 transition-colors focus-within:border-accent focus-within:bg-sheet">
       <input
         type="number"
-        className="w-full min-w-0 bg-transparent text-xs text-neutral-900 tabular-nums outline-none disabled:text-neutral-400"
+        className="w-full min-w-0 bg-transparent font-mono text-ink text-xs tabular-nums outline-none disabled:text-faint"
         value={draft ?? (value === undefined ? '' : format(value))}
         placeholder={placeholder}
         disabled={disabled}
@@ -121,7 +119,7 @@ export function NumberField({
           if (event.key === 'Escape') setDraft(null);
         }}
       />
-      {suffix ? <span className="shrink-0 text-[11px] text-neutral-400">{suffix}</span> : null}
+      {suffix ? <span className="shrink-0 font-mono text-faint text-micro">{suffix}</span> : null}
     </div>
   );
 }
@@ -148,15 +146,15 @@ export function SliderField({ value, onChange, min, max, step, suffix }: SliderF
           if (next !== undefined) onChange(next);
         }}
       >
-        <Slider.Track className="relative h-1 w-full grow rounded-full bg-neutral-200">
-          <Slider.Range className="absolute h-full rounded-full bg-neutral-800" />
+        <Slider.Track className="relative h-1 w-full grow rounded-full bg-rule">
+          <Slider.Range className="absolute h-full rounded-full bg-accent" />
         </Slider.Track>
         <Slider.Thumb
           aria-label="Значение"
-          className="block size-3.5 rounded-full border border-neutral-300 bg-white shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+          className="block size-3.5 rounded-full border border-rule-strong bg-sheet shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
       </Slider.Root>
-      <span className="w-10 shrink-0 text-right text-xs text-neutral-500 tabular-nums">
+      <span className="w-10 shrink-0 text-right font-mono text-micro text-pencil tabular-nums">
         {value === undefined ? '—' : `${format(value)}${suffix ?? ''}`}
       </span>
     </div>
@@ -178,14 +176,14 @@ export function ToggleField({ checked, onChange, label }: ToggleFieldProps) {
         checked={checked === true}
         onCheckedChange={onChange}
         title={checked === undefined ? 'Разные значения' : undefined}
-        className={`relative h-5 w-9 shrink-0 rounded-full bg-neutral-300 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 data-[state=checked]:bg-neutral-800 ${
+        className={`relative h-5 w-9 shrink-0 rounded-full bg-rule-strong transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent data-[state=checked]:bg-accent ${
           checked === undefined ? 'opacity-60' : ''
         }`}
       >
-        <Switch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-4" />
+        <Switch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-sheet shadow-sm transition-transform data-[state=checked]:translate-x-4" />
       </Switch.Root>
       {label ? (
-        <Label.Root htmlFor={id} className="text-xs text-neutral-600">
+        <Label.Root htmlFor={id} className="text-pencil text-xs">
           {label}
         </Label.Root>
       ) : null}
@@ -209,14 +207,14 @@ export function SegmentedField({ value, onChange, options }: SegmentedFieldProps
         // Radix отдаёт '' при повторном клике по активному — снимать выбор нечем.
         if (next !== '') onChange(next);
       }}
-      className="flex w-full gap-0.5 rounded-md bg-neutral-100 p-0.5"
+      className="flex w-full gap-0.5 rounded-sm bg-well p-0.5"
     >
       {options.map((option) => (
         <ToggleGroup.Item
           key={option.value}
           value={option.value}
           title={option.label}
-          className="flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded px-1.5 py-1 text-xs text-neutral-600 outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 data-[state=on]:bg-white data-[state=on]:text-neutral-900 data-[state=on]:shadow-sm"
+          className="flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-[3px] px-1.5 py-1 text-pencil text-xs outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=on]:bg-sheet data-[state=on]:text-ink data-[state=on]:shadow-sm"
         >
           {option.icon}
           {option.icon ? <span className="sr-only">{option.label}</span> : option.label}
@@ -244,12 +242,12 @@ export function SwatchField({ value, onChange, colors }: SwatchFieldProps) {
           aria-pressed={value === color.fill}
           onClick={() => onChange(color.fill)}
           style={{ backgroundColor: color.fill }}
-          className={`flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 ${
-            value === color.fill ? 'ring-2 ring-neutral-800' : 'ring-1 ring-black/10'
+          className={`flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            value === color.fill ? 'ring-2 ring-ink' : 'ring-1 ring-rule-strong'
           }`}
         >
           {value === color.fill ? (
-            <Check className="size-3.5 text-neutral-900" strokeWidth={3} />
+            <Check className="size-3.5 text-ink mix-blend-luminosity" strokeWidth={3} />
           ) : null}
         </button>
       ))}

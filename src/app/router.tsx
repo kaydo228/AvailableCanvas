@@ -12,7 +12,7 @@ import { ProjectsScreen } from '@/features/projects/ProjectsScreen';
 
 function ProjectsRoute() {
   return (
-    <div className="min-h-screen bg-[#fbfbfd]">
+    <div className="min-h-screen bg-paper">
       <ProjectsHeader />
       <ProjectsScreen />
       <ProjectDialogs />
