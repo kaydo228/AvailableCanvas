@@ -7,6 +7,7 @@
  * Тела — заглушки. Меняется только парой, коммитом с префиксом `contract:`.
  */
 
+import { temporal } from 'zundo';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { createConnector } from '@/features/canvas/connectors/connectorTool';
@@ -23,6 +24,7 @@ import {
   bringToFront as reorderToFront,
 } from '@/features/canvas/selection/layerOrder';
 import { nodesInBox } from '@/features/canvas/selection/marquee';
+import { boardHistory } from '@/features/history/model/temporal';
 import { removeNodes as removeNodesFromDocument } from '@/shared/model/operations';
 import type {
   Anchor,
@@ -159,244 +161,252 @@ const notImplemented = (what: string): never => {
   throw new Error(`не реализовано: ${what}`);
 };
 
+/**
+ * Отмена и возврат (FR-10) — middleware zundo поверх immer. Что попадает
+ * в историю и как склеиваются шаги, описано в `features/history/model/temporal`:
+ * это правила оболочки, контракта зон они не касаются.
+ */
 export const useBoardStore = create<BoardState>()(
-  immer((set) => ({
-    document: null,
-    selection: [],
-    activeTool: 'select' as Tool,
-    editingNodeId: null,
-    canvasSize: { width: 0, height: 0 },
+  temporal(
+    immer((set) => ({
+      document: null,
+      selection: [],
+      activeTool: 'select' as Tool,
+      editingNodeId: null,
+      canvasSize: { width: 0, height: 0 },
 
-    setCanvasSize: (size) =>
-      set((state) => {
-        state.canvasSize = size;
-      }),
+      setCanvasSize: (size) =>
+        set((state) => {
+          state.canvasSize = size;
+        }),
 
-    loadDocument: (document) =>
-      set((state) => {
-        state.document = document;
-        state.selection = [];
-        state.editingNodeId = null;
-      }),
-
-    closeDocument: () =>
-      set((state) => {
-        state.document = null;
-        state.selection = [];
-        state.editingNodeId = null;
-      }),
-
-    setBackground: (patch) =>
-      set((state) => {
-        if (state.document) Object.assign(state.document.background, patch);
-      }),
-
-    // ─── Узлы: реализовано, зона A ────────────────────────────────────────
-    addNode: (node) =>
-      set((state) => {
-        if (!state.document) return;
-        // Инвариант 1: узел обязан попасть И в nodes, И в order.
-        // Только в nodes — он сохранится и не отрисуется, отлаживать тяжело.
-        state.document.nodes[node.id] = node;
-        state.document.order.push(node.id);
-      }),
-
-    removeNodes: (ids) =>
-      set((state) => {
-        if (!state.document) return;
-        // Инвариант 4 живёт в operations.removeNode: он отвязывает концы
-        // коннекторов, считая координаты ДО удаления узла.
-        state.document = removeNodesFromDocument(state.document, ids);
-
-        const doomed = new Set(ids);
-        state.selection = state.selection.filter((id) => !doomed.has(id));
-        if (state.editingNodeId && doomed.has(state.editingNodeId)) {
+      loadDocument: (document) =>
+        set((state) => {
+          state.document = document;
+          state.selection = [];
           state.editingNodeId = null;
-        }
-      }),
+        }),
 
-    updateNode: (id, patch) =>
-      set((state) => {
-        const node = state.document?.nodes[id];
-        if (node) Object.assign(node, patch);
-      }),
+      closeDocument: () =>
+        set((state) => {
+          state.document = null;
+          state.selection = [];
+          state.editingNodeId = null;
+        }),
 
-    updateNodes: (ids, patch) =>
-      set((state) => {
-        if (!state.document) return;
-        for (const id of ids) {
-          const node = state.document.nodes[id];
-          if (node) Object.assign(node, patch);
-        }
-      }),
+      setBackground: (patch) =>
+        set((state) => {
+          if (state.document) Object.assign(state.document.background, patch);
+        }),
 
-    moveNodes: (ids, dx, dy) =>
-      set((state) => {
-        if (!state.document) return;
-        for (const id of ids) {
-          const node = state.document.nodes[id];
-          if (node && node.type !== 'connector') {
-            node.x += dx;
-            node.y += dy;
+      // ─── Узлы: реализовано, зона A ────────────────────────────────────────
+      addNode: (node) =>
+        set((state) => {
+          if (!state.document) return;
+          // Инвариант 1: узел обязан попасть И в nodes, И в order.
+          // Только в nodes — он сохранится и не отрисуется, отлаживать тяжело.
+          state.document.nodes[node.id] = node;
+          state.document.order.push(node.id);
+        }),
+
+      removeNodes: (ids) =>
+        set((state) => {
+          if (!state.document) return;
+          // Инвариант 4 живёт в operations.removeNode: он отвязывает концы
+          // коннекторов, считая координаты ДО удаления узла.
+          state.document = removeNodesFromDocument(state.document, ids);
+
+          const doomed = new Set(ids);
+          state.selection = state.selection.filter((id) => !doomed.has(id));
+          if (state.editingNodeId && doomed.has(state.editingNodeId)) {
+            state.editingNodeId = null;
           }
-        }
-      }),
-    resizeNode: () => notImplemented('resizeNode'),
-    rotateNode: () => notImplemented('rotateNode'),
-    duplicateNodes: () => notImplemented('duplicateNodes'),
+        }),
 
-    // ─── Порядок слоёв: реализовано, зона A ───────────────────────────────
-    bringForward: (ids) =>
-      set((state) => {
-        if (state.document) {
-          state.document.order = reorderForward(state.document.order, ids);
-        }
-      }),
+      updateNode: (id, patch) =>
+        set((state) => {
+          const node = state.document?.nodes[id];
+          if (node) Object.assign(node, patch);
+        }),
 
-    sendBackward: (ids) =>
-      set((state) => {
-        if (state.document) {
-          state.document.order = reorderBackward(state.document.order, ids);
-        }
-      }),
+      updateNodes: (ids, patch) =>
+        set((state) => {
+          if (!state.document) return;
+          for (const id of ids) {
+            const node = state.document.nodes[id];
+            if (node) Object.assign(node, patch);
+          }
+        }),
 
-    bringToFront: (ids) =>
-      set((state) => {
-        if (state.document) {
-          state.document.order = reorderToFront(state.document.order, ids);
-        }
-      }),
+      moveNodes: (ids, dx, dy) =>
+        set((state) => {
+          if (!state.document) return;
+          for (const id of ids) {
+            const node = state.document.nodes[id];
+            if (node && node.type !== 'connector') {
+              node.x += dx;
+              node.y += dy;
+            }
+          }
+        }),
+      resizeNode: () => notImplemented('resizeNode'),
+      rotateNode: () => notImplemented('rotateNode'),
+      duplicateNodes: () => notImplemented('duplicateNodes'),
 
-    sendToBack: (ids) =>
-      set((state) => {
-        if (state.document) {
-          state.document.order = reorderToBack(state.document.order, ids);
-        }
-      }),
+      // ─── Порядок слоёв: реализовано, зона A ───────────────────────────────
+      bringForward: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderForward(state.document.order, ids);
+          }
+        }),
 
-    group: () => notImplemented('group'),
-    ungroup: () => notImplemented('ungroup'),
+      sendBackward: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderBackward(state.document.order, ids);
+          }
+        }),
 
-    // ─── Коннекторы: реализовано, зона A ──────────────────────────────────
-    connect: (from, to) => {
-      const connector = createConnector(from, to);
-      set((state) => {
-        if (!state.document) return;
-        state.document.nodes[connector.id] = connector;
-        state.document.order.push(connector.id);
-      });
-      return connector.id;
-    },
+      bringToFront: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderToFront(state.document.order, ids);
+          }
+        }),
 
-    setConnectorRouting: (id, routing) =>
-      set((state) => {
-        const node = state.document?.nodes[id];
-        if (node?.type === 'connector') node.routing = routing;
-      }),
+      sendToBack: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderToBack(state.document.order, ids);
+          }
+        }),
 
-    /**
-     * Инвариант 3: конец заменяется ЦЕЛИКОМ, а не правится по полям.
-     * Дописать nodeId к концу, у которого уже есть point, — самый простой
-     * способ получить оба поля разом.
-     */
-    reattachEndpoint: (connectorId, which, endpoint) =>
-      set((state) => {
-        const node = state.document?.nodes[connectorId];
-        if (node?.type !== 'connector') return;
-        node[which] = endpoint.nodeId
-          ? { nodeId: endpoint.nodeId, anchor: endpoint.anchor ?? 'auto' }
-          : { point: endpoint.point ?? { x: 0, y: 0 } };
-      }),
+      group: () => notImplemented('group'),
+      ungroup: () => notImplemented('ungroup'),
 
-    setEndpointAnchor: (connectorId, which, anchor) =>
-      set((state) => {
-        const node = state.document?.nodes[connectorId];
-        if (node?.type !== 'connector') return;
-        // У свободного конца стороны нет — привязки к фигуре не существует.
-        if (node[which].nodeId === undefined) return;
-        node[which].anchor = anchor;
-      }),
+      // ─── Коннекторы: реализовано, зона A ──────────────────────────────────
+      connect: (from, to) => {
+        const connector = createConnector(from, to);
+        set((state) => {
+          if (!state.document) return;
+          state.document.nodes[connector.id] = connector;
+          state.document.order.push(connector.id);
+        });
+        return connector.id;
+      },
 
-    select: (ids) =>
-      set((state) => {
-        state.selection = [...ids];
-      }),
+      setConnectorRouting: (id, routing) =>
+        set((state) => {
+          const node = state.document?.nodes[id];
+          if (node?.type === 'connector') node.routing = routing;
+        }),
 
-    addToSelection: (ids) =>
-      set((state) => {
-        state.selection = [...new Set([...state.selection, ...ids])];
-      }),
+      /**
+       * Инвариант 3: конец заменяется ЦЕЛИКОМ, а не правится по полям.
+       * Дописать nodeId к концу, у которого уже есть point, — самый простой
+       * способ получить оба поля разом.
+       */
+      reattachEndpoint: (connectorId, which, endpoint) =>
+        set((state) => {
+          const node = state.document?.nodes[connectorId];
+          if (node?.type !== 'connector') return;
+          node[which] = endpoint.nodeId
+            ? { nodeId: endpoint.nodeId, anchor: endpoint.anchor ?? 'auto' }
+            : { point: endpoint.point ?? { x: 0, y: 0 } };
+        }),
 
-    clearSelection: () =>
-      set((state) => {
-        state.selection = [];
-      }),
+      setEndpointAnchor: (connectorId, which, anchor) =>
+        set((state) => {
+          const node = state.document?.nodes[connectorId];
+          if (node?.type !== 'connector') return;
+          // У свободного конца стороны нет — привязки к фигуре не существует.
+          if (node[which].nodeId === undefined) return;
+          node[which].anchor = anchor;
+        }),
 
-    selectAll: () =>
-      set((state) => {
-        state.selection = state.document ? [...state.document.order] : [];
-      }),
-    selectInBox: (box) =>
-      set((state) => {
-        state.selection = state.document ? nodesInBox(state.document, box) : [];
-      }),
+      select: (ids) =>
+        set((state) => {
+          state.selection = [...ids];
+        }),
 
-    setTool: (tool) =>
-      set((state) => {
-        state.activeTool = tool;
-        // Смена инструмента гасит ввод текста: иначе оверлей остаётся висеть.
-        state.editingNodeId = null;
-      }),
+      addToSelection: (ids) =>
+        set((state) => {
+          state.selection = [...new Set([...state.selection, ...ids])];
+        }),
 
-    startEditing: (id) =>
-      set((state) => {
-        state.editingNodeId = id;
-      }),
+      clearSelection: () =>
+        set((state) => {
+          state.selection = [];
+        }),
 
-    stopEditing: () =>
-      set((state) => {
-        state.editingNodeId = null;
-      }),
+      selectAll: () =>
+        set((state) => {
+          state.selection = state.document ? [...state.document.order] : [];
+        }),
+      selectInBox: (box) =>
+        set((state) => {
+          state.selection = state.document ? nodesInBox(state.document, box) : [];
+        }),
 
-    // ─── Вид: реализовано, зона A ─────────────────────────────────────────
-    setViewport: (viewport) =>
-      set((state) => {
-        if (state.document) state.document.viewport = viewport;
-      }),
+      setTool: (tool) =>
+        set((state) => {
+          state.activeTool = tool;
+          // Смена инструмента гасит ввод текста: иначе оверлей остаётся висеть.
+          state.editingNodeId = null;
+        }),
 
-    panBy: (dx, dy) =>
-      set((state) => {
-        if (state.document) {
-          state.document.viewport = panViewportBy(state.document.viewport, dx, dy);
-        }
-      }),
+      startEditing: (id) =>
+        set((state) => {
+          state.editingNodeId = id;
+        }),
 
-    zoomAt: (screenPoint, factor) =>
-      set((state) => {
-        if (state.document) {
-          state.document.viewport = zoomViewportAt(state.document.viewport, screenPoint, factor);
-        }
-      }),
+      stopEditing: () =>
+        set((state) => {
+          state.editingNodeId = null;
+        }),
 
-    zoomToFit: () =>
-      set((state) => {
-        if (!state.document) return;
-        const box = boundsOf(state.document, state.document.order);
-        state.document.viewport = box ? fitToBox(box, state.canvasSize) : { x: 0, y: 0, zoom: 1 };
-      }),
+      // ─── Вид: реализовано, зона A ─────────────────────────────────────────
+      setViewport: (viewport) =>
+        set((state) => {
+          if (state.document) state.document.viewport = viewport;
+        }),
 
-    zoomToSelection: () =>
-      set((state) => {
-        if (!state.document) return;
-        const box = boundsOf(state.document, state.selection);
-        if (box) state.document.viewport = fitToBox(box, state.canvasSize);
-      }),
+      panBy: (dx, dy) =>
+        set((state) => {
+          if (state.document) {
+            state.document.viewport = panViewportBy(state.document.viewport, dx, dy);
+          }
+        }),
 
-    resetZoom: () =>
-      set((state) => {
-        if (state.document) state.document.viewport.zoom = 1;
-      }),
-  })),
+      zoomAt: (screenPoint, factor) =>
+        set((state) => {
+          if (state.document) {
+            state.document.viewport = zoomViewportAt(state.document.viewport, screenPoint, factor);
+          }
+        }),
+
+      zoomToFit: () =>
+        set((state) => {
+          if (!state.document) return;
+          const box = boundsOf(state.document, state.document.order);
+          state.document.viewport = box ? fitToBox(box, state.canvasSize) : { x: 0, y: 0, zoom: 1 };
+        }),
+
+      zoomToSelection: () =>
+        set((state) => {
+          if (!state.document) return;
+          const box = boundsOf(state.document, state.selection);
+          if (box) state.document.viewport = fitToBox(box, state.canvasSize);
+        }),
+
+      resetZoom: () =>
+        set((state) => {
+          if (state.document) state.document.viewport.zoom = 1;
+        }),
+    })),
+    boardHistory,
+  ),
 );
 
 /** Селекторы, которыми пользуется B, чтобы не лазить в document руками. */

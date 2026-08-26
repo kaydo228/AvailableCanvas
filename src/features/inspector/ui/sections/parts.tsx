@@ -216,7 +216,7 @@ export const LabelSection = ({
       <button
         type="button"
         onClick={onAdd}
-        className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
+        className="w-full rounded-sm border border-rule-strong border-dashed px-2 py-1.5 text-pencil text-sm transition-colors hover:border-accent hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         Добавить подпись
       </button>

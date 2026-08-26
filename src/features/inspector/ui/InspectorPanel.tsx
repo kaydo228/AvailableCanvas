@@ -44,7 +44,7 @@ const singleSection = (node: Node) => {
 };
 
 const toggleClass =
-  'grid size-7 place-items-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900';
+  'grid size-7 place-items-center rounded-sm text-pencil transition-colors hover:bg-well hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export const InspectorPanel = () => {
   // useShallow обязателен: selectSelectedNodes собирает новый массив на каждый
@@ -55,7 +55,7 @@ export const InspectorPanel = () => {
 
   if (collapsed) {
     return (
-      <aside className="flex w-10 shrink-0 flex-col items-center border-l border-neutral-200 bg-white py-2">
+      <aside className="flex w-10 shrink-0 flex-col items-center border-rule border-l bg-sheet py-2">
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -72,9 +72,9 @@ export const InspectorPanel = () => {
   const mode = inspectorMode(nodes);
 
   return (
-    <aside className="flex w-68 shrink-0 flex-col overflow-y-auto border-l border-neutral-200 bg-white">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-3 py-2">
-        <span className="text-sm font-medium text-neutral-900">Свойства</span>
+    <aside className="flex w-72 shrink-0 flex-col overflow-y-auto border-rule border-l bg-sheet">
+      <header className="flex h-11 shrink-0 items-center justify-between border-rule border-b px-3">
+        <span className="label-caps text-pencil">Свойства</span>
         <button
           type="button"
           onClick={toggleCollapsed}

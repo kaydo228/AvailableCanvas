@@ -19,18 +19,18 @@ export interface ColorFieldProps {
 export function ColorField({ value, onChange, presets }: ColorFieldProps) {
   return (
     <Popover.Root>
-      <Popover.Trigger className="flex w-full items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs outline-none hover:bg-neutral-50 focus-visible:border-neutral-400">
+      <Popover.Trigger className="flex w-full items-center gap-2 rounded-sm border border-rule bg-paper px-2 py-1.5 text-xs outline-none transition-colors hover:border-rule-strong focus-visible:border-accent">
         <span
-          className="size-4 shrink-0 rounded ring-1 ring-black/10"
+          className="size-4 shrink-0 rounded-[3px] ring-1 ring-rule-strong"
           style={value === undefined ? undefined : { backgroundColor: value }}
         />
-        <span className="font-mono text-neutral-700">{value ?? 'разные'}</span>
+        <span className="font-mono text-ink uppercase">{value ?? 'разные'}</span>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
           align="end"
           sideOffset={6}
-          className="z-50 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg"
+          className="z-50 rounded-md border border-rule bg-sheet p-3 shadow-pop"
         >
           <HexColorPicker color={value ?? '#ffffff'} onChange={onChange} />
           <HexColorInput
@@ -38,7 +38,7 @@ export function ColorField({ value, onChange, presets }: ColorFieldProps) {
             onChange={onChange}
             prefixed
             aria-label="Цвет в HEX"
-            className="mt-2 w-full rounded border border-neutral-200 px-2 py-1 font-mono text-xs uppercase outline-none focus:border-neutral-400"
+            className="mt-2 w-full rounded-sm border border-rule bg-paper px-2 py-1.5 font-mono text-ink text-xs uppercase outline-none focus:border-accent"
           />
           {presets && presets.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -50,8 +50,8 @@ export function ColorField({ value, onChange, presets }: ColorFieldProps) {
                   title={hex}
                   onClick={() => onChange(hex)}
                   style={{ backgroundColor: hex }}
-                  className={`size-5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 ${
-                    value === hex ? 'ring-2 ring-neutral-800' : 'ring-1 ring-black/10'
+                  className={`size-5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                    value === hex ? 'ring-2 ring-ink' : 'ring-1 ring-rule-strong'
                   }`}
                 />
               ))}

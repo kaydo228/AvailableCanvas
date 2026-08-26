@@ -25,20 +25,20 @@ export const HelpDialog = () => {
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && closeHelp()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30" />
-        <Dialog.Content className="-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 max-h-[80vh] w-[min(680px,92vw)] overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Content className="-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 max-h-[80vh] w-[min(680px,92vw)] overflow-y-auto rounded-lg border border-rule bg-sheet p-6 shadow-pop">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="font-medium text-base text-neutral-900">
+              <Dialog.Title className="font-semibold text-[0.9375rem] text-ink tracking-tight">
                 Горячие клавиши
               </Dialog.Title>
-              <Dialog.Description className="mt-0.5 text-neutral-500 text-xs">
+              <Dialog.Description className="mt-1.5 text-pencil text-xs leading-relaxed">
                 Открыть и закрыть этот список — «?». Во время ввода текста клавиши выключены.
               </Dialog.Description>
             </div>
             <Dialog.Close
               aria-label="Закрыть"
-              className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100"
+              className="rounded-sm p-1 text-pencil transition-colors hover:bg-well hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <X className="size-4" aria-hidden="true" />
             </Dialog.Close>
@@ -47,27 +47,23 @@ export const HelpDialog = () => {
           <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
             {GROUPS.map((group) => (
               <section key={group}>
-                <h3 className="mb-2 font-medium text-[11px] text-neutral-400 uppercase tracking-wide">
-                  {group}
-                </h3>
-                <dl className="space-y-1">
+                <h3 className="label-caps mb-2.5 text-faint">{group}</h3>
+                <dl>
                   {SHORTCUTS.filter((s) => s.group === group).map((shortcut) => {
                     const pending = isPending(shortcut.keys, shortcut.run);
                     return (
                       <div
                         key={`${shortcut.group}-${shortcut.hint}-${shortcut.title}`}
-                        className={`flex items-baseline justify-between gap-3 text-xs ${
-                          pending ? 'text-neutral-400' : 'text-neutral-700'
+                        className={`flex items-baseline justify-between gap-3 border-rule/60 border-b py-1 text-xs last:border-b-0 ${
+                          pending ? 'text-faint' : 'text-ink'
                         }`}
                       >
                         <dt className="min-w-0 truncate">
                           {shortcut.title}
-                          {pending && (
-                            <span className="ml-1 text-neutral-400">— пока не готово</span>
-                          )}
+                          {pending && <span className="ml-1 text-faint">— пока не готово</span>}
                         </dt>
                         <dd>
-                          <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[11px] text-neutral-600">
+                          <kbd className="rounded-[3px] border border-rule bg-paper px-1.5 py-0.5 font-mono text-micro text-pencil">
                             {formatHint(shortcut.hint)}
                           </kbd>
                         </dd>

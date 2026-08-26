@@ -1,1 +1,171 @@
 @import "tailwindcss";
+
+/**
+ * Токены оболочки. Один источник цвета на всё приложение: компоненты знают
+ * только смысловые имена (`bg-sheet`, `text-pencil`), а какие это hex —
+ * решают три блока ниже. Тёмная тема поэтому не правка двадцати мест,
+ * а переопределение переменных.
+ *
+ * Порядок важен: сначала светлая как база, потом системная тёмная (только
+ * если пользователь не выбрал светлую руками), потом явный выбор темы.
+ * Холст (features/canvas) сюда не входит — цвет доски живёт в документе.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Поверхности: стол → лист → углубление (поля, вкладки) */
+  --paper: #ebede8;
+  --sheet: #fbfbf9;
+  --well: #f0f1ec;
+
+  /* Линовка */
+  --rule: #dcdfd7;
+  --rule-strong: #c3c8bd;
+
+  /* Текст: чернила → карандаш → отметка на полях */
+  --ink: #191c1a;
+  --pencil: #5d645f;
+  --faint: #8d948e;
+
+  /* Чертёжные чернила — единственный акцент */
+  --accent: #12604a;
+  --accent-hover: #0d4b3a;
+  --accent-ink: #ffffff;
+  --accent-tint: #e0ece6;
+
+  /* Красный карандаш: только необратимое и ошибки */
+  --signal: #a33321;
+  --signal-tint: #f6e6e2;
+
+  /* Затемнение под диалогом. Своя переменная, а не прозрачные чернила:
+     в тёмной теме чернила светлые и «bg-ink/35» осветлил бы экран. */
+  --scrim: rgb(25 28 26 / 0.4);
+
+  --pop: 0 1px 2px rgb(25 28 26 / 0.06), 0 12px 28px -8px rgb(25 28 26 / 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --paper: #111312;
+    --sheet: #1c201d;
+    --well: #262b28;
+
+    --rule: #343b36;
+    --rule-strong: #48504a;
+
+    --ink: #e9ece6;
+    --pencil: #9ba39c;
+    --faint: #737a75;
+
+    --accent: #4cbe93;
+    --accent-hover: #62cda5;
+    --accent-ink: #07231a;
+    --accent-tint: #1c2f27;
+
+    --signal: #e0705a;
+    --signal-tint: #33211d;
+
+    --scrim: rgb(0 0 0 / 0.6);
+
+    --pop: 0 1px 2px rgb(0 0 0 / 0.5), 0 14px 32px -10px rgb(0 0 0 / 0.7);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #111312;
+  --sheet: #1c201d;
+  --well: #262b28;
+
+  --rule: #343b36;
+  --rule-strong: #48504a;
+
+  --ink: #e9ece6;
+  --pencil: #9ba39c;
+  --faint: #737a75;
+
+  --accent: #4cbe93;
+  --accent-hover: #62cda5;
+  --accent-ink: #07231a;
+  --accent-tint: #1c2f27;
+
+  --signal: #e0705a;
+  --signal-tint: #33211d;
+
+  --scrim: rgb(0 0 0 / 0.6);
+
+  --pop: 0 1px 2px rgb(0 0 0 / 0.5), 0 14px 32px -10px rgb(0 0 0 / 0.7);
+}
+
+/**
+ * inline обязателен: без него Tailwind подставит в утилиты значение,
+ * посчитанное на :root светлой темы, и переключение перестанет работать.
+ */
+@theme inline {
+  /* Golos Text — кириллица родная, а не подмешанная; в ней и рисовали «ё». */
+  --font-sans: "Golos Text", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  /* Всё, что машина измерила — время, координаты, проценты, клавиши. */
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-well: var(--well);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-ink: var(--ink);
+  --color-pencil: var(--pencil);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-signal: var(--signal);
+  --color-signal-tint: var(--signal-tint);
+  --color-scrim: var(--scrim);
+
+  --shadow-pop: var(--pop);
+
+  /* Служебная подпись: 11 px. Разрядка добавляется точечно к капслоку. */
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+
+  /* Радиусы инструмента, а не подушки: 4-6-10, дальше не растём. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-tint);
+    color: var(--color-ink);
+  }
+}
+
+/** Миниатюра доски: та же точечная сетка, что и на холсте. */
+@utility grid-dots {
+  background-image: radial-gradient(circle at 1px 1px, var(--color-rule-strong) 1px, transparent 0);
+  background-size: 14px 14px;
+}
+
+/** Капслок-подпись: 11 px в разрядку. Без неё буквы слипаются. */
+@utility label-caps {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  line-height: 1rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}

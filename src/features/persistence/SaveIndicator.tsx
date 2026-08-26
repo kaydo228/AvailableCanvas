@@ -19,8 +19,8 @@ export const SaveIndicator = () => {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-xs ${
-        status === 'error' ? 'text-red-600' : 'text-slate-500'
+      className={`inline-flex shrink-0 items-center gap-1.5 font-mono text-micro ${
+        status === 'error' ? 'text-signal' : 'text-faint'
       }`}
       // Спокойное объявление: индикатор меняется часто, assertive заспамил бы скринридер.
       aria-live="polite"

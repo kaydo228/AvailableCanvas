@@ -18,7 +18,7 @@ export const ImageSection = ({ node }: { node: ImageNode }) => {
 
       <Section title="Картинка">
         <Row label="Пропорции">
-          <span className="text-sm text-neutral-500 tabular-nums">
+          <span className="font-mono text-micro text-pencil tabular-nums">
             {node.naturalWidth} × {node.naturalHeight}
           </span>
         </Row>

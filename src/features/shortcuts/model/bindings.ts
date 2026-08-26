@@ -14,6 +14,8 @@ import type { Id, Node } from '@/shared/types/document';
 /** Действия, которые обработчику нужны от общего стора. */
 export interface ShortcutActions {
   setTool(tool: string): void;
+  undo(): void;
+  redo(): void;
   removeNodes(ids: Id[]): void;
   selectAll(): void;
   clearSelection(): void;
@@ -111,8 +113,20 @@ export const SHORTCUTS: readonly Shortcut[] = [
   tool('KeyI', 'I', 'Изображение', 'image'),
 
   // ── Правка, раздел 6.3 ────────────────────────────────────────────────
-  { keys: '$mod+KeyZ', hint: '$mod+Z', title: 'Отменить', group: 'Правка' },
-  { keys: '$mod+Shift+KeyZ', hint: '$mod+Shift+Z', title: 'Вернуть', group: 'Правка' },
+  {
+    keys: '$mod+KeyZ',
+    hint: '$mod+Z',
+    title: 'Отменить',
+    group: 'Правка',
+    run: (actions) => actions.undo(),
+  },
+  {
+    keys: '$mod+Shift+KeyZ',
+    hint: '$mod+Shift+Z',
+    title: 'Вернуть',
+    group: 'Правка',
+    run: (actions) => actions.redo(),
+  },
   { keys: '$mod+KeyC', hint: '$mod+C', title: 'Копировать', group: 'Правка' },
   { keys: '$mod+KeyV', hint: '$mod+V', title: 'Вставить', group: 'Правка' },
   { keys: '$mod+KeyD', hint: '$mod+D', title: 'Дублировать', group: 'Правка' },

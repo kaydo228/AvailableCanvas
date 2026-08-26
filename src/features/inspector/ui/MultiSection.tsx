@@ -46,7 +46,7 @@ const ALIGN_OPTIONS = [
 ];
 
 const buttonClass =
-  'grid h-8 flex-1 place-items-center rounded-md border border-neutral-200 bg-white text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-900';
+  'grid h-8 flex-1 place-items-center rounded-sm border border-rule bg-paper text-pencil transition-colors hover:border-rule-strong hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
   const updateNodes = useBoardStore((s) => s.updateNodes);
