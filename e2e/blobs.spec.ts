@@ -18,8 +18,16 @@ test('картинка кладётся, читается и отдаёт нат
     const canvas = document.createElement('canvas');
     canvas.width = 2;
     canvas.height = 1;
-    canvas.getContext('2d')!.fillRect(0, 0, 2, 1);
-    const blob: Blob = await new Promise((r) => canvas.toBlob((b) => r(b!), 'image/png'));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('2d-контекст недоступен');
+    context.fillRect(0, 0, 2, 1);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => (result ? resolve(result) : reject(new Error('toBlob вернул null'))),
+        'image/png',
+      );
+    });
 
     const stored = await putImage(blob);
     const element = await getImageElement(stored.blobId);

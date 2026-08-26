@@ -19,7 +19,7 @@ import { useAutosave } from '@/features/persistence/autosave';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
 import { HelpDialog, useShortcuts } from '@/features/shortcuts';
 import { useBoardStore } from '@/shared/store/board';
-import { AppToaster, ThemeToggle } from '@/shared/ui';
+import { ThemeToggle } from '@/shared/ui';
 
 /** `undefined` — ещё грузим, `null` — такого проекта нет. */
 type LoadState = { name: string } | null | undefined;
@@ -108,9 +108,6 @@ export function CanvasScreen() {
       </div>
 
       <HelpDialog />
-      {/* Свой Toaster: ошибки экспорта показывает этот экран, а тот, что
-          в ProjectDialogs, живёт на другом маршруте. */}
-      <AppToaster />
     </div>
   );
 }

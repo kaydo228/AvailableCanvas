@@ -10,13 +10,22 @@
 import { temporal } from 'zundo';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { createConnector } from '@/features/canvas/connectors/connectorTool';
 import type { Rect, Size } from '@/features/canvas/engine/contract';
 import {
   fitToBox,
   panBy as panViewportBy,
   zoomAt as zoomViewportAt,
 } from '@/features/canvas/engine/viewport';
+import {
+  sendBackward as reorderBackward,
+  bringForward as reorderForward,
+  sendToBack as reorderToBack,
+  bringToFront as reorderToFront,
+} from '@/features/canvas/selection/layerOrder';
+import { nodesInBox } from '@/features/canvas/selection/marquee';
 import { boardHistory } from '@/features/history/model/temporal';
+import { removeNodes as removeNodesFromDocument } from '@/shared/model/operations';
 import type {
   Anchor,
   BoardDocument,
@@ -203,9 +212,11 @@ export const useBoardStore = create<BoardState>()(
       removeNodes: (ids) =>
         set((state) => {
           if (!state.document) return;
+          // Инвариант 4 живёт в operations.removeNode: он отвязывает концы
+          // коннекторов, считая координаты ДО удаления узла.
+          state.document = removeNodesFromDocument(state.document, ids);
+
           const doomed = new Set(ids);
-          for (const id of doomed) delete state.document.nodes[id];
-          state.document.order = state.document.order.filter((id) => !doomed.has(id));
           state.selection = state.selection.filter((id) => !doomed.has(id));
           if (state.editingNodeId && doomed.has(state.editingNodeId)) {
             state.editingNodeId = null;
@@ -242,18 +253,77 @@ export const useBoardStore = create<BoardState>()(
       rotateNode: () => notImplemented('rotateNode'),
       duplicateNodes: () => notImplemented('duplicateNodes'),
 
-      bringForward: () => notImplemented('bringForward'),
-      sendBackward: () => notImplemented('sendBackward'),
-      bringToFront: () => notImplemented('bringToFront'),
-      sendToBack: () => notImplemented('sendToBack'),
+      // ─── Порядок слоёв: реализовано, зона A ───────────────────────────────
+      bringForward: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderForward(state.document.order, ids);
+          }
+        }),
+
+      sendBackward: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderBackward(state.document.order, ids);
+          }
+        }),
+
+      bringToFront: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderToFront(state.document.order, ids);
+          }
+        }),
+
+      sendToBack: (ids) =>
+        set((state) => {
+          if (state.document) {
+            state.document.order = reorderToBack(state.document.order, ids);
+          }
+        }),
 
       group: () => notImplemented('group'),
       ungroup: () => notImplemented('ungroup'),
 
-      connect: () => notImplemented('connect'),
-      setConnectorRouting: () => notImplemented('setConnectorRouting'),
-      reattachEndpoint: () => notImplemented('reattachEndpoint'),
-      setEndpointAnchor: () => notImplemented('setEndpointAnchor'),
+      // ─── Коннекторы: реализовано, зона A ──────────────────────────────────
+      connect: (from, to) => {
+        const connector = createConnector(from, to);
+        set((state) => {
+          if (!state.document) return;
+          state.document.nodes[connector.id] = connector;
+          state.document.order.push(connector.id);
+        });
+        return connector.id;
+      },
+
+      setConnectorRouting: (id, routing) =>
+        set((state) => {
+          const node = state.document?.nodes[id];
+          if (node?.type === 'connector') node.routing = routing;
+        }),
+
+      /**
+       * Инвариант 3: конец заменяется ЦЕЛИКОМ, а не правится по полям.
+       * Дописать nodeId к концу, у которого уже есть point, — самый простой
+       * способ получить оба поля разом.
+       */
+      reattachEndpoint: (connectorId, which, endpoint) =>
+        set((state) => {
+          const node = state.document?.nodes[connectorId];
+          if (node?.type !== 'connector') return;
+          node[which] = endpoint.nodeId
+            ? { nodeId: endpoint.nodeId, anchor: endpoint.anchor ?? 'auto' }
+            : { point: endpoint.point ?? { x: 0, y: 0 } };
+        }),
+
+      setEndpointAnchor: (connectorId, which, anchor) =>
+        set((state) => {
+          const node = state.document?.nodes[connectorId];
+          if (node?.type !== 'connector') return;
+          // У свободного конца стороны нет — привязки к фигуре не существует.
+          if (node[which].nodeId === undefined) return;
+          node[which].anchor = anchor;
+        }),
 
       select: (ids) =>
         set((state) => {
@@ -274,7 +344,10 @@ export const useBoardStore = create<BoardState>()(
         set((state) => {
           state.selection = state.document ? [...state.document.order] : [];
         }),
-      selectInBox: () => notImplemented('selectInBox'),
+      selectInBox: (box) =>
+        set((state) => {
+          state.selection = state.document ? nodesInBox(state.document, box) : [];
+        }),
 
       setTool: (tool) =>
         set((state) => {

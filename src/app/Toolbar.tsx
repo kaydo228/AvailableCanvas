@@ -6,6 +6,7 @@
  * а не подписи. Сам холст об этой панели ничего не знает.
  */
 
+import { useImageInsert } from '@/features/canvas/tools/useImageInsert';
 import type { Tool } from '@/shared/store/board';
 import { useBoardStore } from '@/shared/store/board';
 
@@ -17,13 +18,17 @@ const TOOLS: Array<{ id: Tool; label: string; hotkey: string }> = [
   { id: 'rect', label: 'Прямоугольник', hotkey: 'R' },
   { id: 'ellipse', label: 'Эллипс', hotkey: 'O' },
   { id: 'diamond', label: 'Ромб', hotkey: 'D' },
+  { id: 'connector', label: 'Линия', hotkey: 'L' },
 ];
 
 const BTN =
   'rounded-sm px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-2 ' +
   'focus-visible:outline-offset-2 focus-visible:outline-accent';
 
+const QUIET = `${BTN} text-pencil hover:bg-well hover:text-ink`;
+
 export function Toolbar() {
+  const { pickFile } = useImageInsert();
   const activeTool = useBoardStore((s) => s.activeTool);
   const setTool = useBoardStore((s) => s.setTool);
   const zoom = useBoardStore((s) => s.document?.viewport.zoom ?? 1);
@@ -49,17 +54,23 @@ export function Toolbar() {
         </button>
       ))}
 
+      {/* Картинка не инструмент: она не «включается», а сразу открывает выбор файла. */}
+      <button
+        type="button"
+        onClick={pickFile}
+        title="Картинка (I) — или перетащите файл на холст, или Cmd+V"
+        className={QUIET}
+      >
+        Картинка
+      </button>
+
       <span className="mx-1.5 h-5 w-px bg-rule" aria-hidden="true" />
 
       <span className="px-1 font-mono text-faint text-micro tabular-nums">
         {Math.round(zoom * 100)}% · {count}
       </span>
 
-      <button
-        type="button"
-        onClick={zoomToFit}
-        className={`${BTN} text-pencil hover:bg-well hover:text-ink`}
-      >
+      <button type="button" onClick={zoomToFit} className={QUIET}>
         Вписать
       </button>
     </div>

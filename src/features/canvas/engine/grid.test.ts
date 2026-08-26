@@ -15,6 +15,19 @@ import { visibleWorldRect } from '@/features/canvas/engine/viewport';
 import type { Viewport } from '@/shared/types/document';
 import { ZOOM_MAX, ZOOM_MIN } from '@/shared/types/document';
 
+/**
+ * Элемент массива с проверкой. Включён noUncheckedIndexedAccess, поэтому
+ * доступ по индексу даёт `T | undefined`; глушить это через `!` в тестах —
+ * значит прятать ровно ту ошибку, которую тест и должен поймать.
+ */
+function at<T>(items: readonly T[], index: number): T {
+  const value = items[index];
+  if (value === undefined) {
+    throw new Error(`нет элемента с индексом ${index}, длина ${items.length}`);
+  }
+  return value;
+}
+
 /** Погрешность double на этих величинах ~1e-12, берём с запасом. */
 const EPS = 1e-9;
 
@@ -255,11 +268,9 @@ describe('computeGridLayout', () => {
 
     // Позиции остались кратны шагу, а не «поехали» вслед за краем экрана:
     // сдвиг между соседними раскладками — целое число шагов.
-    const firstColumn = first.columns[0];
-    const secondColumn = second.columns[0];
-    expect(firstColumn).toBeDefined();
-    expect(secondColumn).toBeDefined();
-    expect(isMultipleOf(secondColumn! - firstColumn!, first.worldStep)).toBe(true);
+    const firstColumn = at(first.columns, 0);
+    const secondColumn = at(second.columns, 0);
+    expect(isMultipleOf(secondColumn - firstColumn, first.worldStep)).toBe(true);
   });
 
   it('накрывает всю видимую область, без прорех по краям', () => {
@@ -271,15 +282,15 @@ describe('computeGridLayout', () => {
           if (!layout.visible) continue;
 
           const rect = visibleWorldRect(viewport, canvas);
-          const firstColumn = layout.columns[0];
-          const lastColumn = layout.columns[layout.columns.length - 1];
-          const firstRow = layout.rows[0];
-          const lastRow = layout.rows[layout.rows.length - 1];
+          const firstColumn = at(layout.columns, 0);
+          const lastColumn = at(layout.columns, layout.columns.length - 1);
+          const firstRow = at(layout.rows, 0);
+          const lastRow = at(layout.rows, layout.rows.length - 1);
 
-          expect(firstColumn!).toBeLessThanOrEqual(rect.x + EPS);
-          expect(lastColumn!).toBeGreaterThanOrEqual(rect.x + rect.width - EPS);
-          expect(firstRow!).toBeLessThanOrEqual(rect.y + EPS);
-          expect(lastRow!).toBeGreaterThanOrEqual(rect.y + rect.height - EPS);
+          expect(firstColumn).toBeLessThanOrEqual(rect.x + EPS);
+          expect(lastColumn).toBeGreaterThanOrEqual(rect.x + rect.width - EPS);
+          expect(firstRow).toBeLessThanOrEqual(rect.y + EPS);
+          expect(lastRow).toBeGreaterThanOrEqual(rect.y + rect.height - EPS);
         }
       }
     }

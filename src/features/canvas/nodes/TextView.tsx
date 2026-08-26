@@ -25,7 +25,7 @@
  */
 
 import type { Text as KonvaText } from 'konva/lib/shapes/Text';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { Group, Rect, Text } from 'react-konva';
 
 import type { Size } from '@/features/canvas/engine/contract';
@@ -57,7 +57,7 @@ const MIN_HIT_WIDTH = 24;
 
 const SELECTION_STROKE = '#2563eb';
 
-export function TextView({
+function TextViewInner({
   node,
   selected,
   onSelect,
@@ -111,6 +111,7 @@ export function TextView({
   return (
     <Group
       id={node.id}
+      name="node"
       x={node.x}
       y={node.y}
       rotation={node.rotation}
@@ -161,3 +162,9 @@ export function TextView({
     </Group>
   );
 }
+
+/**
+ * Мемоизация: при перетаскивании стор обновляется каждый кадр,
+ * и без неё перерисовывались бы все узлы доски, а не только сдвинутый.
+ */
+export const TextView = memo(TextViewInner);

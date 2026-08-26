@@ -6,11 +6,14 @@
  * цепочкой if по типам.
  */
 
-import type { ComponentType } from 'react';
-
+import { type ComponentType, useCallback } from 'react';
+import { Group } from 'react-konva';
+import { ConnectorView } from '@/features/canvas/connectors/ConnectorView';
+import { useGroupDrag } from '@/features/canvas/selection/useGroupDrag';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 import type { NodeViewProps } from './contract';
+import { ImageView } from './ImageView';
 import { ShapeView } from './ShapeView';
 import { StickyView } from './StickyView';
 import { TextView } from './TextView';
@@ -25,6 +28,8 @@ const RENDERERS = {
   shape: ShapeView,
   text: TextView,
   sticky: StickyView,
+  image: ImageView,
+  connector: ConnectorView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
 
 export function NodesLayer() {
@@ -35,13 +40,43 @@ export function NodesLayer() {
   const addToSelection = useBoardStore((s) => s.addToSelection);
   const startEditing = useBoardStore((s) => s.startEditing);
   const updateNode = useBoardStore((s) => s.updateNode);
+  const groupDrag = useGroupDrag();
+  const activeTool = useBoardStore((s) => s.activeTool);
+
+  /*
+   * Колбэки стабильные: без этого memo на рендерерах бесполезен —
+   * новая функция на каждый рендер слоя считается изменившимся пропом,
+   * и перерисовываются все узлы разом.
+   */
+  const handleSelect = useCallback(
+    (nodeId: string, additive: boolean) => (additive ? addToSelection([nodeId]) : select([nodeId])),
+    [addToSelection, select],
+  );
+
+  const handleDragEnd = useCallback(
+    (nodeId: string, x: number, y: number) => updateNode(nodeId, { x, y }),
+    [updateNode],
+  );
 
   if (!document) return null;
 
   const selected = new Set(selection);
 
   return (
-    <>
+    // Обёртка нужна, чтобы поймать всплывающие события перетаскивания
+    // от любого узла: рендереры про выделение не знают.
+    <Group
+      /*
+       * Узлы слушают мышь только под «Выбором». Иначе протяжка инструментом
+       * «Линия», начатая на фигуре, тянет саму фигуру: Konva видит нажатие
+       * на draggable-узле раньше, чем до события доходит инструмент.
+       * Поймано вживую — линия рисовалась, но фигура при этом уезжала.
+       */
+      listening={activeTool === 'select'}
+      onDragStart={groupDrag.onDragStart}
+      onDragMove={groupDrag.onDragMove}
+      onDragEnd={groupDrag.onDragEnd}
+    >
       {document.order.map((id) => {
         const node = document.nodes[id];
         if (!node) return null;
@@ -55,14 +90,12 @@ export function NodesLayer() {
             node={node}
             selected={selected.has(id)}
             editing={editingNodeId === id}
-            onSelect={(nodeId, additive) =>
-              additive ? addToSelection([nodeId]) : select([nodeId])
-            }
+            onSelect={handleSelect}
             onStartEditing={startEditing}
-            onDragEnd={(nodeId, x, y) => updateNode(nodeId, { x, y })}
+            onDragEnd={handleDragEnd}
           />
         );
       })}
-    </>
+    </Group>
   );
 }

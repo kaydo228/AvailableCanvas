@@ -5,12 +5,16 @@
  * Отдельные зоны про стор не знают, связывание живёт здесь.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Layer, Stage } from 'react-konva';
-
+import { AnchorHints } from '@/features/canvas/connectors/AnchorHints';
+import { useConnectorTool } from '@/features/canvas/connectors/useConnectorTool';
 import { EditingOverlay } from '@/features/canvas/nodes/EditingOverlay';
 import { NodesLayer } from '@/features/canvas/nodes/NodesLayer';
 import { PreviewNode } from '@/features/canvas/nodes/PreviewNode';
+import { MarqueeRect } from '@/features/canvas/selection/MarqueeRect';
+import { SelectionTransformer } from '@/features/canvas/selection/SelectionTransformer';
+import { useImageInsert } from '@/features/canvas/tools/useImageInsert';
 import { useToolController } from '@/features/canvas/tools/useToolController';
 import { useBoardStore } from '@/shared/store/board';
 import type { Size } from './contract';
@@ -30,6 +34,24 @@ export function CanvasStage() {
   const setCanvasSize = useBoardStore((s) => s.setCanvasSize);
 
   const tools = useToolController();
+  // Холст — единственная точка подписки на Cmd+V, см. ImageInsertOptions.
+  const images = useImageInsert({ paste: true });
+  const connectors = useConnectorTool();
+
+  // Первый замер синхронный, до ResizeObserver: тот срабатывает через кадр,
+  // и вставка картинки сразу после открытия проекта успевала увидеть нулевой
+  // размер холста — картинка ложилась в начало мировых координат вместо
+  // центра экрана. Воспроизводилось ровно один раз, при первой вставке.
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      const next = { width: rect.width, height: rect.height };
+      setSize(next);
+      setCanvasSize(next);
+    }
+  }, [setCanvasSize]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -63,7 +85,13 @@ export function CanvasStage() {
 
   return (
     <div
+      // Холст принимает мышь и сброс файлов, поэтому это не «статический
+      // элемент с обработчиком», а самостоятельное приложение внутри страницы.
+      role="application"
+      aria-label="Холст доски"
       {...gestureProps}
+      onDragOver={images.onDragOver}
+      onDrop={images.onDrop}
       ref={(el) => {
         hostRef.current = el;
         gestureProps.ref?.(el);
@@ -73,21 +101,41 @@ export function CanvasStage() {
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        cursor: tools.creating ? 'crosshair' : cursor,
+        cursor: tools.creating || connectors.active ? 'crosshair' : cursor,
         touchAction: 'none',
       }}
     >
       <Stage
         width={size.width}
         height={size.height}
-        onMouseDown={tools.onMouseDown}
-        onMouseMove={tools.onMouseMove}
-        onMouseUp={tools.onMouseUp}
+        onMouseDown={(event) => {
+          connectors.onMouseDown(event);
+          tools.onMouseDown(event);
+        }}
+        onMouseMove={(event) => {
+          connectors.onMouseMove(event);
+          tools.onMouseMove(event);
+        }}
+        onMouseUp={(event) => {
+          connectors.onMouseUp(event);
+          tools.onMouseUp(event);
+        }}
       >
         <GridLayer viewport={viewport} size={size} />
         <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
           <NodesLayer />
           <PreviewNode node={tools.preview} />
+        </Layer>
+
+        {/*
+          Выделение — отдельный слой Konva. В общем слое каждый клик и каждое
+          движение рамки перерисовывали бы всю доску: на тысяче узлов это
+          заметно сразу.
+        */}
+        <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
+          <MarqueeRect box={tools.marquee} />
+          <AnchorHints hint={connectors.hint} draft={connectors.draft} />
+          <SelectionTransformer />
         </Layer>
       </Stage>
 
