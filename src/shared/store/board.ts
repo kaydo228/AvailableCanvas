@@ -9,6 +9,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { createConnector } from '@/features/canvas/connectors/connectorTool';
 import type { Rect, Size } from '@/features/canvas/engine/contract';
 import {
   fitToBox,
@@ -273,10 +274,45 @@ export const useBoardStore = create<BoardState>()(
     group: () => notImplemented('group'),
     ungroup: () => notImplemented('ungroup'),
 
-    connect: () => notImplemented('connect'),
-    setConnectorRouting: () => notImplemented('setConnectorRouting'),
-    reattachEndpoint: () => notImplemented('reattachEndpoint'),
-    setEndpointAnchor: () => notImplemented('setEndpointAnchor'),
+    // ─── Коннекторы: реализовано, зона A ──────────────────────────────────
+    connect: (from, to) => {
+      const connector = createConnector(from, to);
+      set((state) => {
+        if (!state.document) return;
+        state.document.nodes[connector.id] = connector;
+        state.document.order.push(connector.id);
+      });
+      return connector.id;
+    },
+
+    setConnectorRouting: (id, routing) =>
+      set((state) => {
+        const node = state.document?.nodes[id];
+        if (node?.type === 'connector') node.routing = routing;
+      }),
+
+    /**
+     * Инвариант 3: конец заменяется ЦЕЛИКОМ, а не правится по полям.
+     * Дописать nodeId к концу, у которого уже есть point, — самый простой
+     * способ получить оба поля разом.
+     */
+    reattachEndpoint: (connectorId, which, endpoint) =>
+      set((state) => {
+        const node = state.document?.nodes[connectorId];
+        if (node?.type !== 'connector') return;
+        node[which] = endpoint.nodeId
+          ? { nodeId: endpoint.nodeId, anchor: endpoint.anchor ?? 'auto' }
+          : { point: endpoint.point ?? { x: 0, y: 0 } };
+      }),
+
+    setEndpointAnchor: (connectorId, which, anchor) =>
+      set((state) => {
+        const node = state.document?.nodes[connectorId];
+        if (node?.type !== 'connector') return;
+        // У свободного конца стороны нет — привязки к фигуре не существует.
+        if (node[which].nodeId === undefined) return;
+        node[which].anchor = anchor;
+      }),
 
     select: (ids) =>
       set((state) => {

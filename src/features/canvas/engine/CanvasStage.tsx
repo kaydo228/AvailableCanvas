@@ -7,7 +7,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Layer, Stage } from 'react-konva';
-
+import { AnchorHints } from '@/features/canvas/connectors/AnchorHints';
+import { useConnectorTool } from '@/features/canvas/connectors/useConnectorTool';
 import { EditingOverlay } from '@/features/canvas/nodes/EditingOverlay';
 import { NodesLayer } from '@/features/canvas/nodes/NodesLayer';
 import { PreviewNode } from '@/features/canvas/nodes/PreviewNode';
@@ -35,6 +36,7 @@ export function CanvasStage() {
   const tools = useToolController();
   // Холст — единственная точка подписки на Cmd+V, см. ImageInsertOptions.
   const images = useImageInsert({ paste: true });
+  const connectors = useConnectorTool();
 
   // Первый замер синхронный, до ResizeObserver: тот срабатывает через кадр,
   // и вставка картинки сразу после открытия проекта успевала увидеть нулевой
@@ -99,16 +101,25 @@ export function CanvasStage() {
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        cursor: tools.creating ? 'crosshair' : cursor,
+        cursor: tools.creating || connectors.active ? 'crosshair' : cursor,
         touchAction: 'none',
       }}
     >
       <Stage
         width={size.width}
         height={size.height}
-        onMouseDown={tools.onMouseDown}
-        onMouseMove={tools.onMouseMove}
-        onMouseUp={tools.onMouseUp}
+        onMouseDown={(event) => {
+          connectors.onMouseDown(event);
+          tools.onMouseDown(event);
+        }}
+        onMouseMove={(event) => {
+          connectors.onMouseMove(event);
+          tools.onMouseMove(event);
+        }}
+        onMouseUp={(event) => {
+          connectors.onMouseUp(event);
+          tools.onMouseUp(event);
+        }}
       >
         <GridLayer viewport={viewport} size={size} />
         <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
@@ -123,6 +134,7 @@ export function CanvasStage() {
         */}
         <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
           <MarqueeRect box={tools.marquee} />
+          <AnchorHints hint={connectors.hint} draft={connectors.draft} />
           <SelectionTransformer />
         </Layer>
       </Stage>
