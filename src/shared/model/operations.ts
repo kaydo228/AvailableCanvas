@@ -9,7 +9,8 @@ import {
   referencePoint,
   resolveEndpoint,
 } from '@/features/canvas/connectors/geometry';
-import type { BoardDocument, Id, Node } from '@/shared/types/document';
+import { rotatePoint } from '@/features/canvas/selection/rotate';
+import type { BoardDocument, BoxNode, Id, Node } from '@/shared/types/document';
 
 /**
  * Прозрачность в модели — 0..1 (см. `BaseNode`). Выход за диапазон роняет
@@ -175,8 +176,29 @@ export function withGroupDescendants(document: BoardDocument, ids: Iterable<Id>)
 }
 
 /**
+ * Углы узла с учётом поворота. Konva вращает узел вокруг его `x, y`, то есть
+ * вокруг левого верхнего угла, — здесь та же математика.
+ */
+const corners = (node: BoxNode): { x: number; y: number }[] => {
+  const origin = { x: node.x, y: node.y };
+
+  return [
+    { dx: 0, dy: 0 },
+    { dx: node.width, dy: 0 },
+    { dx: node.width, dy: node.height },
+    { dx: 0, dy: node.height },
+  ].map(({ dx, dy }) => rotatePoint({ x: node.x + dx, y: node.y + dy }, origin, node.rotation));
+};
+
+/**
  * Рамка группы по её содержимому. `null` — считать не от чего: у группы
  * без детей или из одних коннекторов рамки нет.
+ *
+ * Углы берутся с учётом поворота ребёнка, а не по паре `x, y` и размеру:
+ * повёрнутый ребёнок вылезал бы за рамку, и группа переставала бы охватывать
+ * то, что в ней лежит. Заодно это делает поворот группы обратимым — центр
+ * рамки при повороте на прямой угол остаётся на месте, и возврат угла
+ * возвращает состав туда, где он был.
  */
 export function groupBounds(
   document: BoardDocument,
@@ -195,10 +217,12 @@ export function groupBounds(
   for (const id of withGroupDescendants(document, group.children)) {
     const node = document.nodes[id];
     if (!node || node.type === 'connector' || node.type === 'group') continue;
-    minX = Math.min(minX, node.x);
-    minY = Math.min(minY, node.y);
-    maxX = Math.max(maxX, node.x + node.width);
-    maxY = Math.max(maxY, node.y + node.height);
+    for (const corner of corners(node)) {
+      minX = Math.min(minX, corner.x);
+      minY = Math.min(minY, corner.y);
+      maxX = Math.max(maxX, corner.x);
+      maxY = Math.max(maxY, corner.y);
+    }
   }
 
   if (!Number.isFinite(minX)) return null;

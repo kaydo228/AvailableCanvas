@@ -26,6 +26,7 @@ import {
   bringToFront as reorderToFront,
 } from '@/features/canvas/selection/layerOrder';
 import { nodesInBox } from '@/features/canvas/selection/marquee';
+import { normalizeAngle, rotatePoint } from '@/features/canvas/selection/rotate';
 import { boardHistory } from '@/features/history/model/temporal';
 import {
   clampOpacity,
@@ -203,9 +204,25 @@ function resyncGroups(document: BoardDocument, touched: Iterable<Id>): void {
   }
 }
 
+/**
+ * Угол из патча. Через `in`, а не `patch.rotation`: у коннектора поля
+ * `rotation` нет вовсе, и на союзе точечный доступ не проходит по типам.
+ */
+const rotationOf = (patch: NodePatch): number | undefined =>
+  'rotation' in patch ? patch.rotation : undefined;
+
 /** Приводит патч к тому, что модель считает допустимым. */
-const sanitize = (patch: NodePatch): NodePatch =>
-  patch.opacity === undefined ? patch : { ...patch, opacity: clampOpacity(patch.opacity) };
+const sanitize = (patch: NodePatch): NodePatch => {
+  const opacity = patch.opacity === undefined ? {} : { opacity: clampOpacity(patch.opacity) };
+
+  // Угол нормализуется и здесь, хотя за него отвечает rotateNode: панель
+  // свойств правит его обычным патчем, и «370» из поля ввода дошло бы
+  // до модели как есть — мимо единственного места, где угол приводится.
+  const angle = rotationOf(patch);
+  const rotation = angle === undefined ? {} : { rotation: normalizeAngle(angle) };
+
+  return { ...patch, ...opacity, ...rotation };
+};
 
 const notImplemented = (what: string): never => {
   throw new Error(`не реализовано: ${what}`);
@@ -338,7 +355,80 @@ export const useBoardStore = create<BoardState>()(
           resyncGroups(state.document, ids);
         }),
       resizeNode: () => notImplemented('resizeNode'),
-      rotateNode: () => notImplemented('rotateNode'),
+
+      /**
+       * Ставит узлу АБСОЛЮТНЫЙ угол, а не докручивает на дельту: так же
+       * устроены соседи по контракту (`resizeNode` принимает готовую рамку,
+       * а не приращение), и так же приходит значение от трансформера —
+       * Konva отдаёт итоговый угол ручки, а не поворот за кадр.
+       *
+       * ГРУППА поворачивается вместе с содержимым — вокруг центра своей
+       * рамки. Причина та же, что у `moveNodes`: на экране группа один
+       * объект, и повернуть его, оставив состав на месте, значит соврать
+       * пользователю про то, что он повернул. Запретить поворот группы —
+       * второй возможный ответ, и он отвергнут: рамкой уже можно выделить
+       * несколько узлов и провернуть их трансформером как целое, так что
+       * запрет означал бы, что сгруппированное вращается ХУЖЕ
+       * несгруппированного.
+       *
+       * Детям прибавляется дельта `угол − текущий угол группы`, а сама
+       * группа помнит свой угол. Поэтому повторный вызов с тем же значением
+       * ничего не делает: без этой памяти каждый кадр перетаскивания ручки
+       * докручивал бы состав заново.
+       *
+       * Рамка группы после поворота остаётся ОСЕВОЙ — её пересчитывает
+       * `resyncGroups` через `groupBounds`, а тот считает по левым верхним
+       * углам детей, не разворачивая их. Это то же приближение, что и
+       * сегодня при повороте нескольких узлов трансформером; уточнять его
+       * надо в `groupBounds`, одной точке, а не здесь.
+       *
+       * Коннектор молча пропускается: у него нет ни рамки, ни поля
+       * `rotation` (см. `ConnectorNode`), поворачивать нечего. Привязанные
+       * концы поедут сами — маршрут считается от фигур каждый кадр.
+       */
+      rotateNode: (id, degrees) =>
+        set((state) => {
+          if (!state.document) return;
+          const node = state.document.nodes[id];
+          if (!node || node.type === 'connector') return;
+
+          const angle = normalizeAngle(degrees);
+
+          if (node.type !== 'group') {
+            node.rotation = angle;
+            // Угол не двигает x/y, но рамка родителя — производная от
+            // содержимого: пересчёт держит её верной, если groupBounds
+            // однажды научится учитывать поворот.
+            resyncGroups(state.document, [id]);
+            return;
+          }
+
+          const delta = normalizeAngle(angle - normalizeAngle(node.rotation));
+          const center = { x: node.x + node.width / 2, y: node.y + node.height / 2 };
+
+          // Вложенные группы разворачиваем: поворот обязан дойти до листьев,
+          // иначе состав внутренней группы останется стоять.
+          const touched = withGroupDescendants(state.document, node.children);
+
+          for (const childId of touched) {
+            const child = state.document.nodes[childId];
+            if (!child || child.type === 'connector') continue;
+
+            if (child.type !== 'group') {
+              const moved = rotatePoint({ x: child.x, y: child.y }, center, delta);
+              child.x = moved.x;
+              child.y = moved.y;
+            }
+
+            // Вложенной группе двигаем только угол: её рамку всё равно
+            // пересчитает resyncGroups по уже повёрнутым детям.
+            child.rotation = normalizeAngle(normalizeAngle(child.rotation) + delta);
+          }
+
+          node.rotation = angle;
+          resyncGroups(state.document, [...touched, id]);
+        }),
+
       duplicateNodes: () => notImplemented('duplicateNodes'),
 
       // ─── Порядок слоёв: реализовано, зона A ───────────────────────────────

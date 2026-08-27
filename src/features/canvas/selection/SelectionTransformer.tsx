@@ -25,6 +25,7 @@ export function SelectionTransformer() {
   const selection = useBoardStore((s) => s.selection);
   const nodes = useBoardStore((s) => s.document?.nodes);
   const updateNode = useBoardStore((s) => s.updateNode);
+  const rotateNode = useBoardStore((s) => s.rotateNode);
   const editingNodeId = useBoardStore((s) => s.editingNodeId);
 
   // Shift читаем с клавиатуры, а не из события трансформации: пользователь
@@ -127,8 +128,12 @@ export function SelectionTransformer() {
         y: box.y,
         width: box.width,
         height: box.height,
-        rotation: shape.rotation(),
       });
+
+      // Угол — отдельным действием, а не полем в патче: приведение угла
+      // и поворот содержимого групп живут в rotateNode, и записывать
+      // rotation мимо него значит держать вторую правду о повороте.
+      rotateNode(id, shape.rotation());
     }
   };
 
