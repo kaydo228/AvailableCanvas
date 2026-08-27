@@ -17,9 +17,9 @@
  * Функция чистая: ни React, ни стора, ни базы. Проверяется vitest'ом напрямую.
  *
  * Временная дубликация: то же самое обязан уметь `shared/model/invariants.ts`,
- * но его шапка отдаёт реализацию зоне A. Запрос отправлен
- * (docs/CONTRACT-REQUESTS.md, 2026-08-27 B → A). Когда `validateDocument`
- * появится, здесь останется только починка, а поиск нарушений уедет туда.
+ * но его шапка отдаёт реализацию зоне A. Когда `validateDocument` появится,
+ * здесь останется только починка, а поиск нарушений уедет туда
+ * (docs/CONTRACT-REQUESTS.md, 2026-08-27 A → B).
  */
 
 import type { BoardDocument, BoxNode, Endpoint, Id, Node } from '@/shared/types/document';
