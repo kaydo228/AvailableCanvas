@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "e2e": "playwright test",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "docs:pdf": "node scripts/build-pdf.mjs REPORT.md docs/REPORT.pdf \"Отчёт по домашнему заданию №2\" \"Агенты, workflow, изоляция, worktrees — что сделали, что не получилось и чего это стоило\""
   },
   "dependencies": {
     "@use-gesture/react": "^10.3.1",

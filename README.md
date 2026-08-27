@@ -135,6 +135,7 @@ npm run dev
 | [docs/SPEC.md](docs/SPEC.md) | техническое задание |
 | [docs/SPEC.pdf](docs/SPEC.pdf) | оно же в вёрстке |
 | [REPORT.md](REPORT.md) | отчёт по пунктам задания, включая то, что не получилось |
+| [docs/REPORT.pdf](docs/REPORT.pdf) | он же в вёрстке: обложка, оглавление, резюме на полстраницы. Пересобирается `npm run docs:pdf` |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | журнал решений и отвергнутых вариантов |
 | [docs/CONTRACT-REQUESTS.md](docs/CONTRACT-REQUESTS.md) | запросы через границу зон |
 | [docs/TOOLING.md](docs/TOOLING.md) | библиотеки, скиллы, хуки |
