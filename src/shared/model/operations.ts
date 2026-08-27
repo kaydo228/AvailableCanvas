@@ -126,3 +126,81 @@ export function removeNode(document: BoardDocument, nodeId: Id): BoardDocument {
 export function removeNodes(document: BoardDocument, ids: Id[]): BoardDocument {
   return ids.reduce((acc, id) => removeNode(acc, id), document);
 }
+
+/* ─── Группы ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Группа хранится плоско: узлы остаются в `nodes` и `order` на верхнем уровне,
+ * `GroupNode.children` перечисляет состав, `BaseNode.groupId` смотрит обратно.
+ * Двусторонняя связь избыточна намеренно — по ней ходят в обе стороны, и
+ * пересчитывать одну из сторон обходом всего документа было бы дороже.
+ *
+ * Обходы ниже защищены от циклов: документ приходит из файла, и группа,
+ * ссылающаяся на саму себя, — это не гипотеза, а один из проверенных входов.
+ */
+
+/** Верхняя группа, в которую входит узел. Сам узел, если он ни в какой. */
+export function topmostGroup(document: BoardDocument, id: Id): Id {
+  const seen = new Set<Id>([id]);
+  let current = id;
+
+  for (;;) {
+    const node = document.nodes[current];
+    const parent = node && node.type !== 'connector' ? node.groupId : undefined;
+    if (parent === undefined || seen.has(parent) || !document.nodes[parent]) return current;
+    seen.add(parent);
+    current = parent;
+  }
+}
+
+/**
+ * Переданные узлы вместе со всем содержимым групп, включая вложенные.
+ * Порядок сохраняется, дубли убираются: узел мог прийти и сам, и через группу.
+ */
+export function withGroupDescendants(document: BoardDocument, ids: Iterable<Id>): Id[] {
+  const result: Id[] = [];
+  const seen = new Set<Id>();
+
+  const visit = (id: Id): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    result.push(id);
+
+    const node = document.nodes[id];
+    if (node?.type === 'group') for (const child of node.children) visit(child);
+  };
+
+  for (const id of ids) visit(id);
+  return result;
+}
+
+/**
+ * Рамка группы по её содержимому. `null` — считать не от чего: у группы
+ * без детей или из одних коннекторов рамки нет.
+ */
+export function groupBounds(
+  document: BoardDocument,
+  groupId: Id,
+): { x: number; y: number; width: number; height: number } | null {
+  const group = document.nodes[groupId];
+  if (group?.type !== 'group') return null;
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  // Вложенные группы разворачиваем: их собственная рамка могла устареть,
+  // а рамка внешней группы обязана быть верной сама по себе.
+  for (const id of withGroupDescendants(document, group.children)) {
+    const node = document.nodes[id];
+    if (!node || node.type === 'connector' || node.type === 'group') continue;
+    minX = Math.min(minX, node.x);
+    minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + node.width);
+    maxY = Math.max(maxY, node.y + node.height);
+  }
+
+  if (!Number.isFinite(minX)) return null;
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}

@@ -9,10 +9,12 @@
 import { type ComponentType, useCallback } from 'react';
 import { Group } from 'react-konva';
 import { ConnectorView } from '@/features/canvas/connectors/ConnectorView';
+import { selectionForClick } from '@/features/canvas/selection/groupSelection';
 import { useGroupDrag } from '@/features/canvas/selection/useGroupDrag';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 import type { NodeViewProps } from './contract';
+import { GroupView } from './GroupView';
 import { ImageView } from './ImageView';
 import { ShapeView } from './ShapeView';
 import { StickyView } from './StickyView';
@@ -30,6 +32,7 @@ const RENDERERS = {
   sticky: StickyView,
   image: ImageView,
   connector: ConnectorView,
+  group: GroupView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
 
 export function NodesLayer() {
@@ -48,8 +51,18 @@ export function NodesLayer() {
    * новая функция на каждый рендер слоя считается изменившимся пропом,
    * и перерисовываются все узлы разом.
    */
+  /*
+   * Щелчок по участнику группы выделяет всю группу: попасть в неё саму мышью
+   * нельзя, у рамки нет хит-теста. Разворачивание живёт в selection/groupSelection,
+   * рендереры про группы не знают и знать не должны.
+   */
   const handleSelect = useCallback(
-    (nodeId: string, additive: boolean) => (additive ? addToSelection([nodeId]) : select([nodeId])),
+    (nodeId: string, additive: boolean) => {
+      const board = useBoardStore.getState();
+      const doc = board.document;
+      const ids = doc ? selectionForClick(doc, nodeId) : [nodeId];
+      return additive ? addToSelection(ids) : select(ids);
+    },
     [addToSelection, select],
   );
 

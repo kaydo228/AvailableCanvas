@@ -168,8 +168,30 @@ export const SHORTCUTS: readonly Shortcut[] = [
     group: 'Правка',
     run: (actions) => actions.selectAll(),
   },
-  { keys: '$mod+KeyG', hint: '$mod+G', title: 'Сгруппировать', group: 'Правка' },
-  { keys: '$mod+Shift+KeyG', hint: '$mod+Shift+G', title: 'Разгруппировать', group: 'Правка' },
+  {
+    keys: '$mod+KeyG',
+    hint: '$mod+G',
+    title: 'Сгруппировать',
+    group: 'Правка',
+    // Строка ждала реализации в сторе — см. комментарий к `run` выше.
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 1) actions.group(ids);
+    },
+  },
+  {
+    keys: '$mod+Shift+KeyG',
+    hint: '$mod+Shift+G',
+    title: 'Разгруппировать',
+    group: 'Правка',
+    run: (actions, { nodes }) => {
+      // Разбираем все группы, попавшие в выделение: пользователь мог выделить
+      // рамкой несколько сразу, и распустить только первую было бы странно.
+      for (const node of nodes) {
+        if (node.type === 'group') actions.ungroup(node.id);
+      }
+    },
+  },
 
   // ── Слои ──────────────────────────────────────────────────────────────
   {
