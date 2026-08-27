@@ -69,7 +69,7 @@ export interface TextStyle {
 
 export interface ShapeNode extends BaseNode {
   type: 'shape';
-  shape: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'diamond' | 'hexagon';
+  shape: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'diamond' | 'hexagon' | 'heptagon';
   fill: string;
   stroke: string;
   strokeWidth: number;

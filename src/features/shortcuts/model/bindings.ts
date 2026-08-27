@@ -121,6 +121,10 @@ export const SHORTCUTS: readonly Shortcut[] = [
   tool('KeyO', 'O', 'Эллипс', 'ellipse'),
   tool('KeyD', 'D', 'Ромб', 'diamond'),
   tool('KeyX', 'X', 'Шестиугольник', 'hexagon'),
+  // Цифра, а не буква: свободных мнемоничных букв не осталось, а «7»
+  // читается однозначно. Одиночные цифры ничем не заняты — под вид
+  // отведены только сочетания с $mod.
+  tool('Digit7', '7', 'Семиугольник', 'heptagon'),
   tool('KeyL', 'L', 'Линия', 'connector'),
   tool('KeyI', 'I', 'Изображение', 'image'),
 

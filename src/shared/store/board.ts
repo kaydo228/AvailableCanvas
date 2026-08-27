@@ -56,6 +56,7 @@ export type Tool =
   | 'ellipse'
   | 'diamond'
   | 'hexagon'
+  | 'heptagon'
   | 'connector'
   | 'pen'
   | 'image';
