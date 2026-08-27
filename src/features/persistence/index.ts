@@ -19,6 +19,7 @@ export {
   emptyDocument,
   getDocument,
   getProject,
+  isBlankName,
   listProjects,
   MAX_PROJECT_NAME,
   renameProject,

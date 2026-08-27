@@ -27,6 +27,7 @@ import {
   deleteProject,
   duplicateProject,
   getProject,
+  isBlankName,
   MAX_PROJECT_NAME,
   renameProject,
 } from '@/features/persistence';
@@ -130,6 +131,9 @@ function NameDialog({ title, description, initial, confirmLabel, onConfirm }: Na
     setName(initial);
   }, [initial]);
 
+  // Не `trim()`: имя из zero-width пробелов его переживает и даёт карточку
+  // без подписи, которую в списке не отличить от соседних.
+  const blank = isBlankName(name);
   const trimmed = name.trim();
 
   return (
@@ -151,7 +155,7 @@ function NameDialog({ title, description, initial, confirmLabel, onConfirm }: Na
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              if (!trimmed) return;
+              if (blank) return;
               run(() => onConfirm(trimmed));
             }}
           >
@@ -167,7 +171,7 @@ function NameDialog({ title, description, initial, confirmLabel, onConfirm }: Na
               <button type="button" className={BTN_GHOST} onClick={close}>
                 Отмена
               </button>
-              <button type="submit" className={BTN_PRIMARY} disabled={busy || !trimmed}>
+              <button type="submit" className={BTN_PRIMARY} disabled={busy || blank}>
                 {confirmLabel}
               </button>
             </div>

@@ -29,6 +29,20 @@ export const MAX_PROJECT_NAME = 120;
 const capName = (name: string): string =>
   name.length <= MAX_PROJECT_NAME ? name : name.slice(0, MAX_PROJECT_NAME).trimEnd();
 
+/**
+ * Есть ли в имени хоть один видимый символ.
+ *
+ * `trim()` мало: он не трогает ни форматирующие символы (`\p{Cf}` — сюда
+ * попадают zero-width space и метки направления письма), ни экзотические
+ * пробелы. Имя из них проходило проверку и давало карточку без подписи,
+ * которую в списке не отличить от соседних.
+ */
+const INVISIBLE = /[\p{Cf}\p{Zs}\s]/gu;
+export const isBlankName = (name: string): boolean => name.replace(INVISIBLE, '') === '';
+
+/** Имя для записи: пустое по существу — значит пустое. */
+const cleanName = (name: string): string => (isBlankName(name) ? '' : capName(name.trim()));
+
 /** Пустой документ новой доски. Вид в начале координат, зум 1:1. */
 export const emptyDocument = (projectId: Id): BoardDocument => ({
   projectId,
@@ -56,7 +70,7 @@ export const createProject = async (name: string): Promise<Project> => {
   const now = Date.now();
   const project: Project = {
     id: nanoid(),
-    name: capName(name.trim()) || 'Новый проект',
+    name: cleanName(name) || 'Новый проект',
     createdAt: now,
     updatedAt: now,
   };
@@ -82,7 +96,7 @@ export const renameProject = async (id: Id, name: string): Promise<boolean> => {
   if (!project) return false;
   await database.put('projects', {
     ...project,
-    name: capName(name.trim()) || project.name,
+    name: cleanName(name) || project.name,
     updatedAt: Date.now(),
   });
   publish({ kind: 'projects-changed' });
