@@ -24,8 +24,8 @@ export function SelectionTransformer() {
 
   const selection = useBoardStore((s) => s.selection);
   const nodes = useBoardStore((s) => s.document?.nodes);
-  const updateNode = useBoardStore((s) => s.updateNode);
   const resizeNode = useBoardStore((s) => s.resizeNode);
+  const rotateNode = useBoardStore((s) => s.rotateNode);
   const editingNodeId = useBoardStore((s) => s.editingNodeId);
 
   // Shift читаем с клавиатуры, а не из события трансформации: пользователь
@@ -131,8 +131,13 @@ export function SelectionTransformer() {
         height: node.height * scaleY,
       });
 
-      // Поворот рамкой не является и в Box не входит — идёт отдельным патчем.
-      updateNode(id, { rotation: shape.rotation() });
+      /*
+       * Угол — тоже отдельным действием, а не полем в патче: приведение угла
+       * и поворот содержимого групп живут в `rotateNode`. Рамка и поворот
+       * пришли из разных веток и разошлись здесь конфликтом — правильный
+       * итог берёт по одному вызову из каждой, а не одну из версий целиком.
+       */
+      rotateNode(id, shape.rotation());
     }
   };
 
