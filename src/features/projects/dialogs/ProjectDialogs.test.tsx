@@ -20,9 +20,18 @@ const repo = vi.hoisted(() => ({
     updatedAt: 0,
   })),
   deleteProject: vi.fn(async () => undefined),
-  duplicateProject: vi.fn(async () => undefined),
-  renameProject: vi.fn(async () => undefined),
+  // Успех дублирования — это ВЕРНУТЬ копию. `undefined` теперь означает
+  // «проекта уже нет», и диалог обязан на него пожаловаться.
+  duplicateProject: vi.fn(async () => ({
+    id: 'p2',
+    name: 'Схема — копия',
+    createdAt: 0,
+    updatedAt: 0,
+  })),
+  renameProject: vi.fn(async () => true),
   getProject: vi.fn(async () => ({ id: 'p1', name: 'Схема', createdAt: 0, updatedAt: 0 })),
+  isBlankName: (name: string) => name.replace(/[\p{Cf}\p{Zs}\s]/gu, '') === '',
+  MAX_PROJECT_NAME: 120,
 }));
 vi.mock('@/features/persistence', () => repo);
 
@@ -93,10 +102,26 @@ describe('дублирование', () => {
     render(<ProjectDialogs />);
     act(() => useProjectDialogs.getState().openDuplicate('p1'));
 
+    // Пока имя не приехало, кнопка выключена: неизвестно даже, существует ли
+    // ещё проект. Дожидаемся имени, иначе клик уходит в никуда.
+    await screen.findByText(/Копия проекта «Схема»/);
     fireEvent.click(screen.getByText('Дублировать'));
 
     await waitFor(() => expect(repo.duplicateProject).toHaveBeenCalledWith('p1'));
     expect(useProjectDialogs.getState().revision).toBe(1);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('над исчезнувшим проектом жалуется, а не закрывается молча', async () => {
+    repo.duplicateProject.mockResolvedValueOnce(undefined as never);
+    render(<ProjectDialogs />);
+    act(() => useProjectDialogs.getState().openDuplicate('p1'));
+
+    await screen.findByText(/Копия проекта «Схема»/);
+    fireEvent.click(screen.getByText('Дублировать'));
+
+    await waitFor(() => expect(repo.duplicateProject).toHaveBeenCalled());
+    // Диалог остаётся открытым: закрыть его значит соврать про успех.
+    expect(useProjectDialogs.getState().kind).toBe('duplicate');
   });
 });
