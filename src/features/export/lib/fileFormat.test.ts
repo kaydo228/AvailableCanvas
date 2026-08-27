@@ -5,7 +5,9 @@
 
 import { expect, test } from 'vitest';
 
+import { repairDocument } from '@/features/persistence/repair';
 import { doc, shape } from '@/shared/model/fixtures';
+import type { BoardDocument } from '@/shared/types/document';
 import { BadFile, parseBoardFile } from './fileFormat';
 
 const validFile = () => ({
@@ -78,11 +80,24 @@ test('битая модель — сказано, какое поле не то'
   expect(() => parseBoardFile(text(broken2))).toThrow(/ожидалось число, а там строка/);
 });
 
-test('order и nodes разъехались — файл не проходит', () => {
+/*
+ * Раньше здесь стоял отказ: схема сама сверяла order с nodes. Теперь это
+ * забота persistence/repair, и он не отвергает файл, а сводит их обратно
+ * и докладывает об этом. Причина смены — в docs/DECISIONS.md, 2026-08-27:
+ * ровно такой же документ приезжает из IndexedDB, где отказ означал бы
+ * «твоя доска больше не открывается», и разводить два входа нельзя.
+ */
+test('order и nodes разъехались — схема пропускает, чинит repair', () => {
   const broken = validFile();
   const orphan = { ...broken, document: { ...broken.document, order: ['a', 'нет-такого'] } };
 
-  expect(() => parseBoardFile(text(orphan))).toThrow(/нет-такого/);
+  const file = parseBoardFile(text(orphan));
+  expect(file.document.order).toEqual(['a', 'нет-такого']);
+
+  const { document, repairs } = repairDocument(file.document as BoardDocument);
+  expect(document.order).toEqual(['a']);
+  expect(repairs).toHaveLength(1);
+  expect(repairs[0]).toMatchObject({ rule: 1 });
 });
 
 test('картинка узла потерялась — файл не проходит', () => {

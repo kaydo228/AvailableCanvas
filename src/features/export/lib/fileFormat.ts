@@ -95,34 +95,30 @@ const node = z.discriminatedUnion('type', [
   }),
 ]);
 
-const documentSchema = z
-  .object({
-    projectId: z.string(),
-    schemaVersion: z.literal(DOCUMENT_VERSION),
-    nodes: z.record(z.string(), node),
-    order: z.array(z.string()),
-    viewport: z.object({ x: z.number(), y: z.number(), zoom: z.number() }),
-    background: z.object({
-      color: z.string(),
-      grid: z.enum(['dots', 'lines', 'none']),
-    }),
-  })
-  // Инвариант 1 из модели: order и nodes соответствуют один к одному. Схема
-  // его проверяет, потому что документ, где они разъехались, откроется пустым
-  // или потеряет узлы молча — и виноват будет импорт, а не файл.
-  .superRefine((value, ctx) => {
-    for (const id of value.order) {
-      if (!value.nodes[id]) {
-        ctx.addIssue({ code: 'custom', path: ['order'], message: `узла ${id} нет в nodes` });
-      }
-    }
-    const inOrder = new Set(value.order);
-    for (const id of Object.keys(value.nodes)) {
-      if (!inOrder.has(id)) {
-        ctx.addIssue({ code: 'custom', path: ['nodes', id], message: `узла ${id} нет в order` });
-      }
-    }
-  });
+/**
+ * Инвариант 1 (`order` и `nodes` один к одному) схема НЕ проверяет — намеренно.
+ *
+ * Раньше проверяла и отвечала отказом. Причина была верной: документ,
+ * где они разъехались, откроется пустым или потеряет узлы молча, и виноват
+ * будет импорт, а не файл. Но молчания больше нет — `persistence/repair`
+ * сводит `order` и `nodes` обратно и докладывает об этом тостом.
+ *
+ * Оставить отказ здесь значило бы развести два входа: файл с висячим id
+ * отвергается, а точно такой же документ из IndexedDB чинится. Тот же самый
+ * файл человек и получил из нашего же экспорта — отказывать ему в открытии
+ * собственной доски вместо починки неправильно.
+ */
+const documentSchema = z.object({
+  projectId: z.string(),
+  schemaVersion: z.literal(DOCUMENT_VERSION),
+  nodes: z.record(z.string(), node),
+  order: z.array(z.string()),
+  viewport: z.object({ x: z.number(), y: z.number(), zoom: z.number() }),
+  background: z.object({
+    color: z.string(),
+    grid: z.enum(['dots', 'lines', 'none']),
+  }),
+});
 
 export const boardFileSchema = z
   .object({
