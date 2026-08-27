@@ -131,17 +131,59 @@ export interface SliderFieldProps {
   max: number;
   step: number;
   suffix?: string;
+  /**
+   * Значение, которым выделение выравнивается, когда значения разные.
+   * Задано — вместо ползунка показывается кнопка «задать всем».
+   */
+  equalizeTo?: number;
 }
 
-export function SliderField({ value, onChange, min, max, step, suffix }: SliderFieldProps) {
+/**
+ * При `value === undefined` («разные») ползунок не рисуется.
+ *
+ * Раньше он вставал на `min` и врал: подпись «—», а бегунок в нуле, будто
+ * прозрачность у всех нулевая. Хуже того, один клик по дорожке применял
+ * значение сразу ко всем узлам. Теперь разные значения сначала надо явно
+ * свести в одно кнопкой, и только потом ползунок работает как обычно.
+ */
+export function SliderField({
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  suffix,
+  equalizeTo,
+}: SliderFieldProps) {
+  if (value === undefined) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="flex-1 text-faint text-xs">разные</span>
+        {equalizeTo === undefined ? null : (
+          <button
+            type="button"
+            onClick={() => onChange(equalizeTo)}
+            // Явное имя обязательно: кнопка лежит внутри <label> строки, и без
+            // него доступным именем становится подпись строки, а не действие.
+            aria-label={`Задать всем ${format(equalizeTo)}${suffix ?? ''}`}
+            className="shrink-0 rounded-sm border border-rule px-2 py-1 text-pencil text-micro transition-colors hover:border-rule-strong hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            задать всем {format(equalizeTo)}
+            {suffix ?? ''}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex items-center gap-2 ${value === undefined ? 'opacity-60' : ''}`}>
+    <div className="flex items-center gap-2">
       <Slider.Root
         className="relative flex h-4 flex-1 touch-none items-center select-none"
         min={min}
         max={max}
         step={step}
-        value={[value ?? min]}
+        value={[value]}
         onValueChange={([next]) => {
           if (next !== undefined) onChange(next);
         }}
@@ -155,7 +197,8 @@ export function SliderField({ value, onChange, min, max, step, suffix }: SliderF
         />
       </Slider.Root>
       <span className="w-10 shrink-0 text-right font-mono text-micro text-pencil tabular-nums">
-        {value === undefined ? '—' : `${format(value)}${suffix ?? ''}`}
+        {format(value)}
+        {suffix ?? ''}
       </span>
     </div>
   );

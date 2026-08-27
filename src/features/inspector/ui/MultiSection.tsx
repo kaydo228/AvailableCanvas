@@ -81,6 +81,9 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
   };
 
   const opacity = sharedValue(nodes, (node) => node.opacity);
+  /** Куда свести разъехавшуюся прозрачность: среднее — наименее произвольное. */
+  const averageOpacity =
+    Math.round((nodes.reduce((sum, node) => sum + node.opacity, 0) / nodes.length) * 100) / 100;
   const style = (read: (value: TextStyle) => string | number) =>
     sharedValue(nodes, (node) => {
       const value = textStyleOf(node);
@@ -157,6 +160,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               max={100}
               step={1}
               suffix="%"
+              equalizeTo={Math.round(averageOpacity * 100)}
             />
           </Row>
         );
@@ -176,6 +180,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
             <ColorField
               value={sharedValue(nodes, (node) => ('fill' in node ? node.fill : undefined))}
               onChange={(fill) => patch({ fill })}
+              count={nodes.length}
             />
           </Row>
         );
@@ -185,6 +190,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
             <ColorField
               value={sharedValue(nodes, (node) => ('stroke' in node ? node.stroke : undefined))}
               onChange={(stroke) => patch({ stroke })}
+              count={nodes.length}
             />
           </Row>
         );
@@ -217,6 +223,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               <ColorField
                 value={style((value) => value.color) as string | undefined}
                 onChange={(color) => patchTextStyle({ color })}
+                count={nodes.length}
               />
             </Row>
             <Row label="Выравнивание">
