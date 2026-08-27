@@ -120,6 +120,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   tool('KeyR', 'R', 'Прямоугольник', 'rect'),
   tool('KeyO', 'O', 'Эллипс', 'ellipse'),
   tool('KeyD', 'D', 'Ромб', 'diamond'),
+  tool('KeyX', 'X', 'Шестиугольник', 'hexagon'),
   tool('KeyL', 'L', 'Линия', 'connector'),
   tool('KeyI', 'I', 'Изображение', 'image'),
 

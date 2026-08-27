@@ -18,6 +18,7 @@ const TOOLS: Array<{ id: Tool; label: string; hotkey: string }> = [
   { id: 'rect', label: 'Прямоугольник', hotkey: 'R' },
   { id: 'ellipse', label: 'Эллипс', hotkey: 'O' },
   { id: 'diamond', label: 'Ромб', hotkey: 'D' },
+  { id: 'hexagon', label: 'Шестиугольник', hotkey: 'X' },
   { id: 'connector', label: 'Линия', hotkey: 'L' },
 ];
 

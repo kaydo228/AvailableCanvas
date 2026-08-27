@@ -1,6 +1,6 @@
 /**
  * Рендерер узла-фигуры: прямоугольник, скруглённый прямоугольник, эллипс,
- * треугольник, ромб (FR-03 раздела 4 ТЗ).
+ * треугольник, ромб, шестиугольник (FR-03 раздела 4 ТЗ).
  *
  * Компонент ничего не знает про стор: узел приходит пропсом, наружу уходят
  * только колбэки из `NodeViewProps` (см. `nodes/contract.ts`). Стор
@@ -32,13 +32,45 @@ const SELECTION_STROKE = '#2f6fed';
 const SELECTION_STROKE_WIDTH = 1.5;
 
 /**
- * Точки треугольника и ромба в локальных координатах рамки.
+ * Точки треугольника, ромба и шестиугольника в локальных координатах рамки.
  * Konva.Line с `closed` замыкает контур сама — отдельная последняя точка
  * не нужна и даёт лишний узел на стыке при толстой обводке.
+ *
+ * Экспортируется ради тестов: геометрию многоугольника проверяют числами,
+ * а поднимать ради этого Konva в jsdom незачем.
  */
-function polygonPoints(shape: 'triangle' | 'diamond', width: number, height: number): number[] {
+export function polygonPoints(
+  shape: 'triangle' | 'diamond' | 'hexagon',
+  width: number,
+  height: number,
+): number[] {
   if (shape === 'triangle') {
     return [width / 2, 0, width, height, 0, height];
+  }
+  if (shape === 'hexagon') {
+    // Flat-top: горизонтальные стороны сверху и снизу, острые вершины — по
+    // бокам. Скосы отрезают по четверти ширины с каждого края, поэтому обход
+    // идёт от (0.25w, 0) по часовой стрелке.
+    //
+    // Шестиугольник, как эллипс и ромб, вписан в рамку целиком и тянется
+    // вместе с ней: равносторонним он выглядит при отношении высоты к ширине
+    // √3/2 ≈ 0.866, в остальных случаях это его пропорциональное сжатие.
+    // Подгонять габариты под правильность здесь нельзя — рамка узла общая для
+    // всех форм, и фигура обязана её заполнять.
+    return [
+      width * 0.25,
+      0,
+      width * 0.75,
+      0,
+      width,
+      height / 2,
+      width * 0.75,
+      height,
+      width * 0.25,
+      height,
+      0,
+      height / 2,
+    ];
   }
   return [width / 2, 0, width, height / 2, width / 2, height, 0, height / 2];
 }
@@ -58,7 +90,7 @@ function ShapeViewInner({
   // либо есть, либо его нет вовсе.
   const dashProps = node.dash ? { dash: node.dash } : {};
 
-  // Общая часть всех пяти форм. Сама форма рисуется в локальных координатах
+  // Общая часть всех шести форм. Сама форма рисуется в локальных координатах
   // (0,0)–(width,height): позицию и поворот держит Group.
   const paint = {
     fill: node.fill,
@@ -71,7 +103,7 @@ function ShapeViewInner({
     node.shape === 'ellipse' ? (
       // У Konva.Ellipse начало координат в центре, у остальных — в углу.
       <Ellipse x={width / 2} y={height / 2} radiusX={width / 2} radiusY={height / 2} {...paint} />
-    ) : node.shape === 'triangle' || node.shape === 'diamond' ? (
+    ) : node.shape === 'triangle' || node.shape === 'diamond' || node.shape === 'hexagon' ? (
       <Line points={polygonPoints(node.shape, width, height)} closed {...paint} />
     ) : (
       <Rect

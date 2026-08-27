@@ -1,6 +1,6 @@
 /** Секция фигуры: форма, заливка, обводка, скругление, подпись. */
 
-import { Circle, Diamond, Square, Squircle, Triangle } from 'lucide-react';
+import { Circle, Diamond, Hexagon, Square, Squircle, Triangle } from 'lucide-react';
 import {
   ColorField,
   NumberField,
@@ -18,6 +18,7 @@ const SHAPE_OPTIONS = [
   { value: 'ellipse', label: 'Эллипс', icon: <Circle size={14} /> },
   { value: 'triangle', label: 'Треугольник', icon: <Triangle size={14} /> },
   { value: 'diamond', label: 'Ромб', icon: <Diamond size={14} /> },
+  { value: 'hexagon', label: 'Шестиугольник', icon: <Hexagon size={14} /> },
 ];
 
 const FILL_PRESETS = [

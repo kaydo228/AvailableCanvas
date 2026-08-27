@@ -53,7 +53,7 @@ const node = z.discriminatedUnion('type', [
   z.object({
     ...box,
     type: z.literal('shape'),
-    shape: z.enum(['rect', 'roundRect', 'ellipse', 'triangle', 'diamond']),
+    shape: z.enum(['rect', 'roundRect', 'ellipse', 'triangle', 'diamond', 'hexagon']),
     fill: z.string(),
     stroke: z.string(),
     strokeWidth: z.number(),
