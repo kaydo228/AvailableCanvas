@@ -139,5 +139,6 @@ npm run dev
 | [docs/DECISIONS.md](docs/DECISIONS.md) | журнал решений и отвергнутых вариантов |
 | [docs/CONTRACT-REQUESTS.md](docs/CONTRACT-REQUESTS.md) | запросы через границу зон |
 | [docs/TOOLING.md](docs/TOOLING.md) | библиотеки, скиллы, хуки |
+| [docs/PROMPTS-A.md](docs/PROMPTS-A.md), [-B](docs/PROMPTS-B.md), [-SHARED](docs/PROMPTS-SHARED.md) | библиотека промптов, с которой шли в работу: по блоку на день. Чем это отличается от `sessions/` — там то, что реально отправили, здесь то, что планировали отправить |
 | [workflows/](workflows/) | повторяемые процедуры: чеклист перед merge, ночной прогон |
 | [CLAUDE.md](CLAUDE.md) | правила репозитория для агента |
