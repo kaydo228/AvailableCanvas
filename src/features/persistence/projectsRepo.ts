@@ -16,6 +16,19 @@ import { sweepBlobs } from './blobStore';
 import { getDB as db } from './db';
 import { publish } from './sync';
 
+/**
+ * Предел длины имени проекта.
+ *
+ * Поле в диалоге ограничено им же, но одного поля мало: `duplicateProject`
+ * дописывает « — копия» мимо всякого поля, и шесть дублирований подряд давали
+ * имя на 163 символа без всякого предела.
+ */
+export const MAX_PROJECT_NAME = 120;
+
+/** Обрезает имя по пределу, не оставляя висящего пробела на срезе. */
+const capName = (name: string): string =>
+  name.length <= MAX_PROJECT_NAME ? name : name.slice(0, MAX_PROJECT_NAME).trimEnd();
+
 /** Пустой документ новой доски. Вид в начале координат, зум 1:1. */
 export const emptyDocument = (projectId: Id): BoardDocument => ({
   projectId,
@@ -43,7 +56,7 @@ export const createProject = async (name: string): Promise<Project> => {
   const now = Date.now();
   const project: Project = {
     id: nanoid(),
-    name: name.trim() || 'Новый проект',
+    name: capName(name.trim()) || 'Новый проект',
     createdAt: now,
     updatedAt: now,
   };
@@ -58,16 +71,22 @@ export const createProject = async (name: string): Promise<Project> => {
   return project;
 };
 
-export const renameProject = async (id: Id, name: string): Promise<void> => {
+/**
+ * Возвращает `false`, если проекта уже нет. Раньше функция молча выходила,
+ * диалог закрывался, и человек оставался уверен, что переименовал доску —
+ * а её удалили в соседней вкладке.
+ */
+export const renameProject = async (id: Id, name: string): Promise<boolean> => {
   const database = await db();
   const project = await database.get('projects', id);
-  if (!project) return;
+  if (!project) return false;
   await database.put('projects', {
     ...project,
-    name: name.trim() || project.name,
+    name: capName(name.trim()) || project.name,
     updatedAt: Date.now(),
   });
   publish({ kind: 'projects-changed' });
+  return true;
 };
 
 /** Копия проекта вместе с содержимым доски. Возвращает новый проект. */
@@ -81,7 +100,7 @@ export const duplicateProject = async (id: Id): Promise<Project | undefined> => 
   const copy: Project = {
     ...source,
     id: nanoid(),
-    name: `${source.name} — копия`,
+    name: capName(`${source.name} — копия`),
     createdAt: now,
     updatedAt: now,
   };

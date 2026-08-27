@@ -15,7 +15,7 @@ import { CanvasStage } from '@/features/canvas/engine/CanvasStage';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
-import { getDocument, getProject, saveDocument } from '@/features/persistence';
+import { getDocument, getProject, releaseImageCache, saveDocument } from '@/features/persistence';
 import { beginSaveSession, endSaveSession, useAutosave } from '@/features/persistence/autosave';
 import { describeRepairs, repairDocument } from '@/features/persistence/repair';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
@@ -31,6 +31,7 @@ export function CanvasScreen() {
   const [state, setState] = useState<LoadState>(undefined);
 
   const loadDocument = useBoardStore((s) => s.loadDocument);
+  const closeDocument = useBoardStore((s) => s.closeDocument);
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
   useAutosave();
@@ -95,8 +96,16 @@ export function CanvasScreen() {
     return () => {
       cancelled = true;
       endSaveSession();
+      // Документ обязан уйти из стора вместе с экраном. Пока он оставался
+      // висеть, повторный заход на ТОТ ЖЕ проект выглядел для автосохранения
+      // правкой (projectId совпадает с предыдущим), и каждое открытие
+      // переписывало документ и двигало updatedAt.
+      closeDocument();
+      // Object URL'ы картинок живут до явного отзыва — иначе они копятся
+      // за всю сессию по всем открытым доскам.
+      releaseImageCache();
     };
-  }, [projectId, loadDocument]);
+  }, [projectId, loadDocument, closeDocument]);
 
   if (state === null) return <Navigate to="/" replace />;
 

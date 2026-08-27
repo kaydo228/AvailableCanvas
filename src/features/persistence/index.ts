@@ -20,7 +20,9 @@ export {
   getDocument,
   getProject,
   listProjects,
+  MAX_PROJECT_NAME,
   renameProject,
+  type SaveOutcome,
   saveDocument,
 } from './projectsRepo';
 export { describeRepairs, type Repair, type RepairResult, repairDocument } from './repair';
