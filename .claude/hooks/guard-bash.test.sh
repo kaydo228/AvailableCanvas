@@ -52,6 +52,9 @@ check allow 'сборка'                     'npm run build'
 check allow 'чтение README'              'cat README.md'
 check allow 'ветка не main'              'git switch feat/connectors'
 check allow 'слово key внутри имени'     'cat src/features/shortcuts/lib/keyHint.ts'
+# Нашло ревью 27 августа: расширение секрета обязано кончаться на границе,
+# иначе составное имя вроде app.key.js читается как файл с ключом.
+check allow 'составное имя с .key.'      'cp dist/app.key.js build/'
 
 echo
 printf 'Итого: %d прошло, %d провалено\n' "$pass" "$fail"

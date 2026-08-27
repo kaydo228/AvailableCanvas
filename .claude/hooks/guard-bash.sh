@@ -39,9 +39,15 @@ fi
 # а не команда, и путей к нему сотни. Список ниже закрывает известные,
 # а не все. Механизм, который не обходится сменой команды, — права ОС
 # на сам файл; хук лишь поднимает цену попытки и оставляет след в логе.
+#
+# После расширения имя секрета обязано КОНЧАТЬСЯ на границе: точка после
+# «.key» означает, что это часть составного имени вроде app.key.js,
+# а не файл с ключом. Иначе обычное «cp dist/app.key.js build/»
+# отбивалось бы как чтение секрета — ложное срабатывание того же
+# класса, что и f05c69b.
 
 word_start='(^|[;&|(`$[:space:]])'
-secret_path='(\.(env|pem|key|p12|pfx)([^[:alnum:]]|$)|(^|[^[:alnum:]])(id_rsa|id_ed25519|\.ssh/|\.aws/|\.gnupg/|\.netrc|\.npmrc))'
+secret_path='(\.(env|pem|key|p12|pfx)([^[:alnum:].]|$)|(^|[^[:alnum:]])(id_rsa|id_ed25519|\.ssh/|\.aws/|\.gnupg/|\.netrc|\.npmrc))'
 readers="${word_start}(cat|less|more|head|tail|bat|open|nl|xxd|od|strings|dd|awk|sed|cut|column|tee|cp|scp|rsync)([[:space:]]|$)"
 interpreters="${word_start}(python[0-9.]*|perl|ruby|node|deno|bun|php|osascript|exec|source)([[:space:]]|$)"
 redirect='<[[:space:]]*[^[:space:]<>]*(env|pem|key|rsa|ed25519|netrc|npmrc)'

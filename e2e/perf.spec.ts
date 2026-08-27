@@ -18,12 +18,17 @@ import { expect, test } from '@playwright/test';
  * движения виден, а в среднем не виден.
  */
 
-type Measurement = {
-  nodeCount: number;
+type Sample = {
   frames: number;
   fps: number;
   worstFrameGap: number;
   p95FrameGap: number;
+};
+
+type Measurement = Sample & {
+  nodeCount: number;
+  /** Та же петля на пустой доске, снятая в этом же прогоне и на этой же машине. */
+  baseline: Sample;
 };
 
 const openFreshProject = async (page: import('@playwright/test').Page, name: string) => {
@@ -53,6 +58,57 @@ const measure = (
   page.evaluate(
     async ({ shapeCount, connectorCount, mode }) => {
       const store = window.__board.getState();
+
+      /**
+       * Крутит вьюпорт `duration` мс и возвращает распределение разрывов
+       * между кадрами. Абсолютные пороги привязали бы тест к скорости
+       * конкретного ноутбука, поэтому та же петля снимается дважды:
+       * до загрузки узлов и после. Сравниваем нагрузку с пустой доской
+       * на той же машине, в том же прогоне.
+       */
+      const spin = async (duration: number): Promise<Sample> => {
+        const gaps: number[] = [];
+        let previous = performance.now();
+        const started = previous;
+        let frames = 0;
+
+        await new Promise<void>((done) => {
+          const tick = () => {
+            const now = performance.now();
+            gaps.push(now - previous);
+            previous = now;
+            frames++;
+
+            // Движение на каждом кадре — как при живом перетаскивании
+            // или прокрутке колесом с зажатым Cmd.
+            if (mode === 'pan') {
+              window.__board.getState().panBy(-14, -9);
+            } else {
+              const zoom = window.__board.getState().document?.viewport.zoom ?? 1;
+              // Пила между 0.4 и 2.5, чтобы не упереться в границы инварианта 5
+              // и не мерить работу clampZoom вместо рендера.
+              const factor =
+                zoom > 2.5 ? 0.97 : zoom < 0.4 ? 1.03 : frames % 120 < 60 ? 1.02 : 0.98;
+              window.__board.getState().zoomAt({ x: 640, y: 360 }, factor);
+            }
+
+            if (now - started < duration) requestAnimationFrame(tick);
+            else done();
+          };
+          requestAnimationFrame(tick);
+        });
+
+        // Первый кадр меряет паузу до запуска петли, а не рендер.
+        const clean = gaps.slice(1).sort((a, b) => a - b);
+        return {
+          frames,
+          fps: Math.round((frames / (previous - started)) * 1000),
+          worstFrameGap: Math.round(clean[clean.length - 1] ?? 0),
+          p95FrameGap: Math.round(clean[Math.floor(clean.length * 0.95)] ?? 0),
+        };
+      };
+
+      const baseline = await spin(1000);
 
       const nodes: Record<string, unknown> = {};
       const order: string[] = [];
@@ -102,96 +158,65 @@ const measure = (
       // к движению отношения не имеет и мерить его нечестно.
       await new Promise((r) => setTimeout(r, 1200));
 
-      const gaps: number[] = [];
-      let previous = performance.now();
-      const started = previous;
-      let frames = 0;
-
-      await new Promise<void>((done) => {
-        const tick = () => {
-          const now = performance.now();
-          gaps.push(now - previous);
-          previous = now;
-          frames++;
-
-          // Движение на каждом кадре — как при живом перетаскивании
-          // или прокрутке колесом с зажатым Cmd.
-          if (mode === 'pan') {
-            window.__board.getState().panBy(-14, -9);
-          } else {
-            const zoom = window.__board.getState().document?.viewport.zoom ?? 1;
-            // Пила между 0.4 и 2.5, чтобы не упереться в границы инварианта 5
-            // и не мерить работу clampZoom вместо рендера.
-            const factor = zoom > 2.5 ? 0.97 : zoom < 0.4 ? 1.03 : frames % 120 < 60 ? 1.02 : 0.98;
-            window.__board.getState().zoomAt({ x: 640, y: 360 }, factor);
-          }
-
-          if (now - started < 2500) requestAnimationFrame(tick);
-          else done();
-        };
-        requestAnimationFrame(tick);
-      });
-
-      // Первый кадр меряет паузу до запуска, а не рендер.
-      const clean = gaps.slice(1).sort((a, b) => a - b);
-      const p95 = clean[Math.floor(clean.length * 0.95)] ?? 0;
+      const loaded = await spin(2500);
 
       return {
         nodeCount: Object.keys(window.__board.getState().document.nodes).length,
-        frames,
-        fps: Math.round((frames / (previous - started)) * 1000),
-        worstFrameGap: Math.round(clean[clean.length - 1] ?? 0),
-        p95FrameGap: Math.round(p95),
+        ...loaded,
+        baseline,
       };
     },
     { shapeCount, connectorCount, mode },
   );
 
-test('NFR-01 базовая линия: та же петля на почти пустой доске', async ({ page }) => {
-  await openFreshProject(page, 'Базовая линия');
-  const result = await measure(page, 10, 0, 'pan');
-  console.log('NFR-01 baseline:', JSON.stringify(result));
+/**
+ * Проверка одного замера.
+ *
+ * Абсолютный порог здесь только один — сам NFR-01 про 50 fps. Всё остальное
+ * сравнивается с базовой линией, снятой в этом же прогоне на этой же машине:
+ * иначе тест меряет не доску, а ноутбук, и краснеет на медленной машине
+ * без единого изменения в коде.
+ *
+ * Множитель 2,5 взят по факту 27 августа: базовая линия 17 мс, под тысячей
+ * узлов 33 — это ровно вдвое. Цель по-прежнему «как на пустой доске»,
+ * порог стоит чуть выше факта, чтобы ловить ухудшение. Опускать его молча
+ * нельзя: разбор и долг — в REPORT.md, «Замер NFR-01».
+ */
+const check = (result: Measurement, what: string) => {
+  console.log(`NFR-01 ${what}:`, JSON.stringify(result));
 
-  // Смысл этого сценария — не проверить приложение, а измерить сам стенд.
-  // Без него числа ниже нечитаемы: если headless-браузер и на десяти узлах
-  // роняет кадры, то «33 мс на тысяче» говорит о стенде, а не о доске.
-  expect(result.frames, 'петля вообще крутилась').toBeGreaterThan(60);
-});
+  // Стенд обязан быть вменяемым, иначе сравнивать не с чем.
+  expect(result.baseline.frames, 'петля на пустой доске крутилась').toBeGreaterThan(20);
+  expect(result.baseline.p95FrameGap, 'на пустой доске кадры ровные').toBeLessThan(25);
+
+  expect(result.fps, `средний fps: ${what}`).toBeGreaterThanOrEqual(50);
+  expect(result.p95FrameGap, `95-й процентиль против базовой линии: ${what}`).toBeLessThan(
+    Math.max(25, result.baseline.p95FrameGap * 2.5),
+  );
+  expect(result.worstFrameGap, `худший кадр против базовой линии: ${what}`).toBeLessThan(
+    Math.max(45, result.baseline.p95FrameGap * 4),
+  );
+};
 
 test('NFR-01: панорамирование доски из 1000 фигур', async ({ page }) => {
   await openFreshProject(page, 'Тысяча фигур, панорама');
   const result = await measure(page, 1000, 0, 'pan');
-  console.log('NFR-01 pan/shapes:', JSON.stringify(result));
 
   expect(result.nodeCount).toBe(1000);
-  // Само требование NFR-01 — про частоту кадров, и оно выполняется.
-  expect(result.fps, 'средний fps при панорамировании').toBeGreaterThanOrEqual(50);
-  // А это — не цель, а зафиксированная сегодняшняя реальность. Цель 20 мс
-  // (один пропущенный кадр при 60 Гц), факт — около 33 при базовой линии 17,
-  // то есть примерно каждый десятый кадр теряется. Порог стоит выше факта,
-  // чтобы ловить ухудшение, и ниже него нельзя опускать молча: разбор
-  // и долг — в REPORT.md, «Замер NFR-01».
-  expect(result.p95FrameGap, '95-й процентиль разрыва между кадрами').toBeLessThan(40);
-  expect(result.worstFrameGap, 'худший кадр').toBeLessThan(70);
+  check(result, 'pan/shapes');
 });
 
 test('NFR-01: зум доски из 1000 фигур', async ({ page }) => {
   await openFreshProject(page, 'Тысяча фигур, зум');
   const result = await measure(page, 1000, 0, 'zoom');
-  console.log('NFR-01 zoom/shapes:', JSON.stringify(result));
 
-  expect(result.fps, 'средний fps при зуме').toBeGreaterThanOrEqual(50);
-  expect(result.p95FrameGap, '95-й процентиль разрыва между кадрами').toBeLessThan(40);
-  expect(result.worstFrameGap, 'худший кадр').toBeLessThan(70);
+  check(result, 'zoom/shapes');
 });
 
 test('NFR-01: панорамирование 700 фигур и 300 коннекторов', async ({ page }) => {
   await openFreshProject(page, 'Фигуры и линии');
   const result = await measure(page, 700, 300, 'pan');
-  console.log('NFR-01 pan/connectors:', JSON.stringify(result));
 
   expect(result.nodeCount).toBe(1000);
-  expect(result.fps, 'средний fps с коннекторами').toBeGreaterThanOrEqual(50);
-  expect(result.p95FrameGap, '95-й процентиль разрыва между кадрами').toBeLessThan(40);
-  expect(result.worstFrameGap, 'худший кадр').toBeLessThan(70);
+  check(result, 'pan/connectors');
 });
