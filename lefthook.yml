@@ -1,42 +1,30 @@
-# EXAMPLE USAGE:
+# Git-хуки проекта. Ставятся командой `npx lefthook install` — она прописана
+# в `npm run prepare`, то есть отрабатывает сама после `npm install`.
 #
-#   Refer for explanation to following link:
-#   https://lefthook.dev/configuration/
-#
-# pre-push:
-#   jobs:
-#     - name: packages audit
-#       tags:
-#         - frontend
-#         - security
-#       run: yarn audit
-#
-#     - name: gems audit
-#       tags:
-#         - backend
-#         - security
-#       run: bundle audit
-#
-# pre-commit:
-#   parallel: true
-#   jobs:
-#     - run: yarn eslint {staged_files}
-#       glob: "*.{js,ts,jsx,tsx}"
-#
-#     - name: rubocop
-#       glob: "*.rb"
-#       exclude:
-#         - config/application.rb
-#         - config/routes.rb
-#       run: bundle exec rubocop --force-exclusion -- {all_files}
-#
-#     - name: govet
-#       files: git ls-files -m
-#       glob: "*.go"
-#       run: go vet -- {files}
-#
-#     - script: "hello.js"
-#       runner: node
-#
-#     - script: "hello.go"
-#       runner: go run
+# До 27 августа этот файл был нетронутым примером из коробки: lefthook стоял
+# в зависимостях, конфигурация лежала закомментированной, git-хуков не было
+# ни одного. Мёртвая обвязка выглядит как живая — и это хуже, чем её отсутствие.
+
+commit-msg:
+  jobs:
+    # Единственное правило из CLAUDE.md, у которого за неделю не нашлось
+    # механизма: правки общего шва (модель данных и стор) обязаны идти
+    # коммитом с префиксом `contract:`. Правило написали в понедельник
+    # и не выполнили ни разу — ровно потому, что его нечем было заметить.
+    - name: contract-prefix
+      run: bash scripts/check-contract-commit.sh {1}
+
+pre-commit:
+  parallel: true
+  jobs:
+    # Типы — единственная проверка, которую стоит держать до коммита:
+    # она ловит то, что дороже всего чинить задним числом. Тесты и e2e
+    # намеренно не здесь, а в `workflows/pre-merge.md`: полный прогон
+    # на каждый коммит превращает хук в то, что обходят через --no-verify.
+    - name: typecheck
+      glob: '*.{ts,tsx}'
+      run: npm run typecheck
+
+    - name: biome
+      glob: '*.{ts,tsx,js,jsx,json,jsonc,css}'
+      run: npx biome check {staged_files}
