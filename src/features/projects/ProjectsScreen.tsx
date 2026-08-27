@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 
 import { listProjects } from '@/features/persistence';
+import { subscribe } from '@/features/persistence/sync';
 import { useProjectDialogs } from '@/features/projects/dialogsStore';
 import type { Project } from '@/shared/types/document';
 
@@ -24,11 +25,21 @@ export const ProjectsScreen = () => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision — намеренный триггер перечитывания, в теле эффекта не используется.
   useEffect(() => {
     let alive = true;
-    void listProjects().then((list) => {
-      if (alive) setProjects(list);
-    });
+    const reread = () => {
+      void listProjects().then((list) => {
+        if (alive) setProjects(list);
+      });
+    };
+    reread();
+
+    // Соседняя вкладка могла создать, переименовать или удалить проект.
+    // Без этого список врал до перезагрузки страницы, и «Переименовать»
+    // открывалось над проектом, которого уже нет.
+    const unsubscribe = subscribe(reread);
+
     return () => {
       alive = false;
+      unsubscribe();
     };
   }, [revision]);
 

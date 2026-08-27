@@ -16,7 +16,7 @@ import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
 import { getDocument, getProject, saveDocument } from '@/features/persistence';
-import { useAutosave } from '@/features/persistence/autosave';
+import { beginSaveSession, endSaveSession, useAutosave } from '@/features/persistence/autosave';
 import { describeRepairs, repairDocument } from '@/features/persistence/repair';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
 import { HelpDialog, useShortcuts } from '@/features/shortcuts';
@@ -51,7 +51,8 @@ export function CanvasScreen() {
     let cancelled = false;
     setState(undefined);
 
-    Promise.all([getProject(projectId), getDocument(projectId)]).then(([project, stored]) => {
+    const open = async () => {
+      const [project, stored] = await Promise.all([getProject(projectId), getDocument(projectId)]);
       if (cancelled) return;
       if (!project || !stored) {
         setState(null);
@@ -63,23 +64,37 @@ export function CanvasScreen() {
       // версией, так и оставалась в базе. Починенное дописываем сразу, иначе
       // тот же документ будет чиниться при каждом открытии.
       const { document, repairs } = repairDocument(stored);
+      let openedAt = project.updatedAt;
+
       if (repairs.length > 0) {
-        void saveDocument(document);
+        // Запись починки двигает updatedAt, и сессию надо открывать уже
+        // с новым значением — иначе первое же автосохранение решит, что
+        // документ переписала другая вкладка.
+        const outcome = await saveDocument(document, project.updatedAt);
+        if (outcome.ok) openedAt = outcome.updatedAt;
+        if (cancelled) return;
         toast.warning('Доска была повреждена, пришлось поправить', {
           description: describeRepairs(repairs),
           duration: 15_000,
         });
       }
 
+      // Вкладка объявляет, с каким updatedAt открыла проект: каждая запись
+      // потом сверяется с этим значением и не затирает чужую работу молча.
+      beginSaveSession(project.id, openedAt);
+
       loadDocument(document);
       // Открытие проекта — не действие пользователя. Без явной чистки первый
       // Cmd+Z откатывал бы саму загрузку: доска на секунду становилась пустой.
       clearHistory();
       setState({ name: project.name });
-    });
+    };
+
+    void open();
 
     return () => {
       cancelled = true;
+      endSaveSession();
     };
   }, [projectId, loadDocument]);
 
