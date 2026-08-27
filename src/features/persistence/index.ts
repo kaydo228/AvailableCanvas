@@ -21,3 +21,4 @@ export {
   renameProject,
   saveDocument,
 } from './projectsRepo';
+export { describeRepairs, type Repair, type RepairResult, repairDocument } from './repair';

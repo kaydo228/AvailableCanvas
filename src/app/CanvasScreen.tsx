@@ -9,13 +9,15 @@
 import { ChevronLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
+import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage } from '@/features/canvas/engine/CanvasStage';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
-import { getDocument, getProject } from '@/features/persistence';
+import { getDocument, getProject, saveDocument } from '@/features/persistence';
 import { useAutosave } from '@/features/persistence/autosave';
+import { describeRepairs, repairDocument } from '@/features/persistence/repair';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
 import { HelpDialog, useShortcuts } from '@/features/shortcuts';
 import { useBoardStore } from '@/shared/store/board';
@@ -49,12 +51,26 @@ export function CanvasScreen() {
     let cancelled = false;
     setState(undefined);
 
-    Promise.all([getProject(projectId), getDocument(projectId)]).then(([project, document]) => {
+    Promise.all([getProject(projectId), getDocument(projectId)]).then(([project, stored]) => {
       if (cancelled) return;
-      if (!project || !document) {
+      if (!project || !stored) {
         setState(null);
         return;
       }
+
+      // Документ из хранилища проверяется наравне с импортированным: до сих пор
+      // он попадал в стор без единой проверки, и порча, записанная старой
+      // версией, так и оставалась в базе. Починенное дописываем сразу, иначе
+      // тот же документ будет чиниться при каждом открытии.
+      const { document, repairs } = repairDocument(stored);
+      if (repairs.length > 0) {
+        void saveDocument(document);
+        toast.warning('Доска была повреждена, пришлось поправить', {
+          description: describeRepairs(repairs),
+          duration: 15_000,
+        });
+      }
+
       loadDocument(document);
       // Открытие проекта — не действие пользователя. Без явной чистки первый
       // Cmd+Z откатывал бы саму загрузку: доска на секунду становилась пустой.

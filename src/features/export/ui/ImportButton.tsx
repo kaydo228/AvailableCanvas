@@ -11,6 +11,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
+import { describeRepairs } from '@/features/persistence/repair';
 import { importJson } from '../model/transfer';
 
 export function ImportButton() {
@@ -23,8 +24,17 @@ export function ImportButton() {
     setBusy(true);
 
     void importJson(file)
-      .then((project) => {
-        toast.success(`Доска «${project.name}» открыта`);
+      .then(({ project, repairs }) => {
+        // Починки не прячем: файл открылся не таким, каким его отдавали,
+        // и узнать об этом человек должен здесь, а не по кривой доске.
+        if (repairs.length > 0) {
+          toast.warning(`Доска «${project.name}» открыта, но файл пришлось поправить`, {
+            description: describeRepairs(repairs),
+            duration: 15_000,
+          });
+        } else {
+          toast.success(`Доска «${project.name}» открыта`);
+        }
         void navigate(`/p/${project.id}`);
       })
       .catch((error: unknown) => {

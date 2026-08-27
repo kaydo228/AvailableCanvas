@@ -13,6 +13,7 @@
 
 import { getBlob, putImage } from '@/features/persistence/blobStore';
 import { createProject, saveDocument } from '@/features/persistence/projectsRepo';
+import { type Repair, repairDocument } from '@/features/persistence/repair';
 import { useBoardStore } from '@/shared/store/board';
 import type { BoardDocument, Id, Node, Project } from '@/shared/types/document';
 import {
@@ -98,14 +99,26 @@ const remapImages = (nodes: Record<Id, Node>, remap: Map<Id, Id>): Record<Id, No
     ]),
   );
 
+export interface ImportResult {
+  project: Project;
+  /** Что пришлось поправить в документе. Пусто — файл был в порядке. */
+  repairs: Repair[];
+}
+
 /**
  * Импортирует файл в НОВЫЙ проект. Существующие доски не трогает: импорт,
  * который молча перезаписывает открытую доску, теряет чужую работу.
  *
+ * Документ проходит через `repairDocument`: схема ловит структуру, но не
+ * инварианты модели, и файл с `zoom: 0` или дублями в `order` до этого
+ * уезжал в хранилище как есть. Список починок возвращается наружу — молча
+ * править чужой файл нельзя, человек должен знать, что получил не то,
+ * что отдавали.
+ *
  * @throws BadFile — файл не прошёл проверку, текст показывать пользователю.
  * @throws ImageRejected — картинка внутри файла не проходит по формату или размеру.
  */
-export const importJson = async (file: File): Promise<Project> => {
+export const importJson = async (file: File): Promise<ImportResult> => {
   const parsed = parseBoardFile(await file.text());
 
   // Картинки перекладываются ДО создания проекта: если одна из них не пройдёт
@@ -119,12 +132,12 @@ export const importJson = async (file: File): Promise<Project> => {
 
   const project = await createProject(parsed.name);
 
-  const document: BoardDocument = {
+  const { document, repairs } = repairDocument({
     ...parsed.document,
     projectId: project.id,
     nodes: remapImages(parsed.document.nodes as Record<Id, Node>, remap),
-  };
+  } as BoardDocument);
 
   await saveDocument(document);
-  return project;
+  return { project, repairs };
 };
