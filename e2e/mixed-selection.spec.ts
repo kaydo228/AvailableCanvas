@@ -71,8 +71,8 @@ const colorTrigger = (page: import('@playwright/test').Page, label: string) =>
 
 const fills = (page: import('@playwright/test').Page) =>
   page.evaluate(() => {
-    const document = window.__board.getState().document;
-    return ['sh', 'st'].map((id) => (document?.nodes[id] as { fill: string }).fill);
+    const nodes = window.__board.getState().document?.nodes ?? {};
+    return ['sh', 'st'].map((id) => (nodes[id] as { fill: string } | undefined)?.fill);
   });
 
 test('один клик по палитре при «разных» ничего не меняет', async ({ page }) => {
@@ -80,9 +80,9 @@ test('один клик по палитре при «разных» ничего
   expect(await fills(page)).toEqual(['#ff0000', '#00ff00']);
 
   await colorTrigger(page, 'Заливка').click();
-  const picker = page.locator('.react-colorful__saturation');
-  const box = await picker.boundingBox();
-  await page.mouse.click(box!.x + box!.width * 0.5, box!.y + box!.height * 0.5);
+  const box = await page.locator('.react-colorful__saturation').boundingBox();
+  if (!box) throw new Error('палитра не открылась');
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
 
   // Цвета узлов не тронуты — правка ждёт подтверждения.
   expect(await fills(page)).toEqual(['#ff0000', '#00ff00']);
@@ -107,8 +107,8 @@ test('прозрачность при разных значениях не по�
 
   await page.getByRole('button', { name: /Задать всем/ }).click();
   const opacities = await page.evaluate(() => {
-    const document = window.__board.getState().document;
-    return ['sh', 'st'].map((id) => (document?.nodes[id] as { opacity: number }).opacity);
+    const nodes = window.__board.getState().document?.nodes ?? {};
+    return ['sh', 'st'].map((id) => (nodes[id] as { opacity: number } | undefined)?.opacity ?? -1);
   });
   expect(opacities[0]).toBeCloseTo(0.6, 2);
   expect(opacities[1]).toBeCloseTo(0.6, 2);
