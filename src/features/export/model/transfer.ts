@@ -11,7 +11,7 @@
  * удаление на одной сломает другую.
  */
 
-import { getBlob, putImage } from '@/features/persistence/blobStore';
+import { deleteBlob, getBlob, putImage } from '@/features/persistence/blobStore';
 import { createProject, saveDocument } from '@/features/persistence/projectsRepo';
 import { type Repair, repairDocument } from '@/features/persistence/repair';
 import { useBoardStore } from '@/shared/store/board';
@@ -82,7 +82,21 @@ export const exportJson = async (name: string): Promise<void> => {
   }
 };
 
+/**
+ * Читает картинку из файла.
+ *
+ * Проверка префикса — не формальность. `fetch` берёт любую строку, и без неё
+ * файл с `images: {"x": "http://чужой.хост/beacon"}` заставлял приложение
+ * сходить по этому адресу при открытии доски: маячок «файл открыт» плюс запрос
+ * по адресу, доступному из сети того, кто открыл. Ни один узел на такую запись
+ * ссылаться не обязан — старый цикл шёл по `images`, а не по узлам.
+ */
 const blobFromDataUrl = async (blobId: Id, dataUrl: string): Promise<Blob> => {
+  if (!dataUrl.startsWith('data:image/')) {
+    throw new BadFile(
+      `Картинка ${blobId} записана в файле не как data-URL картинки — прочитать нечем.`,
+    );
+  }
   try {
     return await (await fetch(dataUrl)).blob();
   } catch {
@@ -121,13 +135,29 @@ export interface ImportResult {
 export const importJson = async (file: File): Promise<ImportResult> => {
   const parsed = parseBoardFile(await file.text());
 
+  // Перекладываем только те картинки, на которые ссылается хоть один узел.
+  // Обход по всему `images` означал, что запись, не нужную ни одному узлу,
+  // приложение всё равно пойдёт читать — этим и пользовался маячок.
+  const needed = new Set<Id>();
+  for (const node of Object.values(parsed.document.nodes)) {
+    if (node.type === 'image') needed.add(node.blobId);
+  }
+
   // Картинки перекладываются ДО создания проекта: если одна из них не пройдёт
   // проверку putImage, лучше не оставлять после себя пустой проект в списке.
+  // Уже записанные при этом сносятся — иначе каждая повторная попытка
+  // импорта того же файла добавляла бы в базу ещё один осиротевший блоб.
   const remap = new Map<Id, Id>();
-  for (const [blobId, dataUrl] of Object.entries(parsed.images)) {
-    const blob = await blobFromDataUrl(blobId, dataUrl);
-    const stored = await putImage(blob);
-    remap.set(blobId, stored.blobId);
+  try {
+    for (const [blobId, dataUrl] of Object.entries(parsed.images)) {
+      if (!needed.has(blobId)) continue;
+      const blob = await blobFromDataUrl(blobId, dataUrl);
+      const stored = await putImage(blob);
+      remap.set(blobId, stored.blobId);
+    }
+  } catch (error) {
+    await Promise.all([...remap.values()].map((id) => deleteBlob(id)));
+    throw error;
   }
 
   const project = await createProject(parsed.name);
