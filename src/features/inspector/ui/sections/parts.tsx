@@ -63,7 +63,14 @@ export const DashRow = ({
 
 type BoxPatch = { x?: number; y?: number; width?: number; height?: number; rotation?: number };
 
-/** Рамка. У коннектора её нет — он эту секцию не рисует. */
+/**
+ * Рамка. У коннектора её нет — он эту секцию не рисует.
+ *
+ * При замке поля геометрии выключены: до этого замок соблюдал только холст,
+ * а панель спокойно двигала заблокированный узел мышью. Оформление и сам
+ * замок при этом остаются доступными — иначе замок нечем снять, да и «только
+ * чтение» это уже другая функция (docs/DECISIONS.md, 2026-08-27).
+ */
 export const BoxSection = ({
   node,
   onPatch,
@@ -75,21 +82,26 @@ export const BoxSection = ({
 }) => (
   <Section title="Положение и размер">
     <Row label="X">
-      <NumberField value={node.x} onChange={(x) => onPatch({ x })} />
+      <NumberField value={node.x} onChange={(x) => onPatch({ x })} disabled={node.locked} />
     </Row>
     <Row label="Y">
-      <NumberField value={node.y} onChange={(y) => onPatch({ y })} />
+      <NumberField value={node.y} onChange={(y) => onPatch({ y })} disabled={node.locked} />
     </Row>
     <Row label="Ширина">
       <NumberField
         value={node.width}
         onChange={(width) => onPatch({ width })}
         min={1}
-        disabled={widthDisabled}
+        disabled={widthDisabled || node.locked}
       />
     </Row>
     <Row label="Высота">
-      <NumberField value={node.height} onChange={(height) => onPatch({ height })} min={1} />
+      <NumberField
+        value={node.height}
+        onChange={(height) => onPatch({ height })}
+        min={1}
+        disabled={node.locked}
+      />
     </Row>
     <Row label="Поворот">
       <NumberField
@@ -97,6 +109,7 @@ export const BoxSection = ({
         onChange={(rotation) => onPatch({ rotation })}
         step={1}
         suffix="°"
+        disabled={node.locked}
       />
     </Row>
   </Section>

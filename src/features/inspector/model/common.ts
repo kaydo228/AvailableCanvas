@@ -85,7 +85,14 @@ export const commonFields = (nodes: Node[]): CommonField[] => {
   const all = (predicate: (node: Node) => boolean) => nodes.every(predicate);
   const fields: CommonField[] = [];
 
-  if (all(hasBox)) fields.push('x', 'y', 'width', 'height', 'rotation');
+  // Группа рамку имеет, но сдвиг рамки её детей не двигает: `moveNodes` про
+  // `children` не знает. Пока это не починено в зоне A (запрос отправлен,
+  // docs/CONTRACT-REQUESTS.md, 2026-08-27 B → A), поля геометрии у группы
+  // не показываем вовсе: поле, которое двигает рамку отдельно от содержимого,
+  // хуже отсутствующего.
+  if (all(hasBox) && !nodes.some((node) => node.type === 'group')) {
+    fields.push('x', 'y', 'width', 'height', 'rotation');
+  }
 
   // opacity и locked есть у всех типов, включая коннектор — это и есть тот
   // минимум, который остаётся при разнотипном выделении.

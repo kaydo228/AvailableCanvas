@@ -58,6 +58,14 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
   const ids = idsOf(nodes);
   const patch = (change: NodePatch) => updateNodes(ids, change);
 
+  /*
+   * Замок выключает геометрию, но не оформление: снять замок должно быть чем,
+   * а «только чтение» — это уже другая функция (docs/DECISIONS.md, 2026-08-27).
+   * Достаточно одного заблокированного узла: применять сдвиг ко всем, кроме
+   * него, значит тихо развалить выделенную группу объектов по разным местам.
+   */
+  const anyLocked = nodes.some((node) => node.locked);
+
   /**
    * Единственное место, где одним патчем не обойтись: у фигуры стиль лежит под
    * ключом `label`, у текста и стикера — под `text`, и новое значение надо
@@ -88,6 +96,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               value={boxValue(nodes, (n) => n.x)}
               onChange={(x) => patch({ x })}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -98,6 +107,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               value={boxValue(nodes, (n) => n.y)}
               onChange={(y) => patch({ y })}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -109,6 +119,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               onChange={(width) => patch({ width })}
               min={1}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -120,6 +131,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               onChange={(height) => patch({ height })}
               min={1}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -130,6 +142,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               value={boxValue(nodes, (n) => n.rotation)}
               onChange={(rotation) => patch({ rotation })}
               suffix="°"
+              disabled={anyLocked}
             />
           </Row>
         );

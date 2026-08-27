@@ -66,6 +66,19 @@ export interface Shortcut {
 const NUDGE_STEP = 1;
 const NUDGE_STEP_FAST = 10;
 
+/**
+ * Выделенное без заблокированного.
+ *
+ * Замок соблюдался только холстом (`draggable`, рамка выделения), а клавиши
+ * его не знали вовсе: Delete сносил заблокированный узел, стрелки его двигали.
+ * Проверка стоит здесь, в зоне B, а не в действиях стора — те принадлежат
+ * зоне A, и лезть в них ради этого не нужно.
+ */
+const movable = ({ selection, nodes }: ShortcutContext): Id[] => {
+  const locked = new Set(nodes.filter((node) => node.locked).map((node) => node.id));
+  return selection.filter((id) => !locked.has(id));
+};
+
 /** Пара «стрелка» и «Shift+стрелка» одной строкой. */
 const nudge = (keys: string, arrow: string, title: string, dx: number, dy: number): Shortcut[] => [
   {
@@ -73,10 +86,9 @@ const nudge = (keys: string, arrow: string, title: string, dx: number, dy: numbe
     hint: arrow,
     title,
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) {
-        actions.moveNodes(selection, dx * NUDGE_STEP, dy * NUDGE_STEP);
-      }
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.moveNodes(ids, dx * NUDGE_STEP, dy * NUDGE_STEP);
     },
   },
   {
@@ -84,10 +96,9 @@ const nudge = (keys: string, arrow: string, title: string, dx: number, dy: numbe
     hint: `Shift+${arrow}`,
     title: `${title} на 10`,
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) {
-        actions.moveNodes(selection, dx * NUDGE_STEP_FAST, dy * NUDGE_STEP_FAST);
-      }
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.moveNodes(ids, dx * NUDGE_STEP_FAST, dy * NUDGE_STEP_FAST);
     },
   },
 ];
@@ -135,8 +146,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
     hint: 'Delete',
     title: 'Удалить выделенное',
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) actions.removeNodes(selection);
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.removeNodes(ids);
     },
   },
   {
@@ -144,8 +156,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
     hint: 'Backspace',
     title: 'Удалить выделенное',
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) actions.removeNodes(selection);
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.removeNodes(ids);
     },
   },
   {
