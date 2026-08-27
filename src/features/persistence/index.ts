@@ -1,5 +1,6 @@
 export {
   ALLOWED_IMAGE_TYPES,
+  collectOrphanBlobs,
   deleteBlob,
   getBlob,
   getBlobUrl,
@@ -9,6 +10,7 @@ export {
   putImage,
   releaseImageCache,
   type StoredImage,
+  sweepBlobs,
 } from './blobStore';
 export {
   createProject,

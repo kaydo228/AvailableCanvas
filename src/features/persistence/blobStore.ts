@@ -145,7 +145,38 @@ export const getImageElement = async (blobId: Id): Promise<HTMLImageElement | un
   return element;
 };
 
-/** Удаляет картинку и её кэши. Вызывать, когда удалён последний ссылающийся узел. */
+/**
+ * blobId, на которые не ссылается ни один документ.
+ *
+ * Считается по документам, а не по узлам открытой доски: узел, удалённый
+ * с холста, вернётся по Cmd+Z, и картинку под ним трогать нельзя — отмена
+ * превратилась бы в дыру. Документ, которого больше нет, вернуть нечем,
+ * поэтому его картинки освобождать безопасно.
+ */
+export const collectOrphanBlobs = async (): Promise<Id[]> =>
+  withDB(async (db) => {
+    const alive = new Set<Id>();
+    for (const document of await db.getAll('documents')) {
+      for (const node of Object.values(document.nodes)) {
+        if (node.type === 'image') alive.add(node.blobId);
+      }
+    }
+    return (await db.getAllKeys('blobs')).filter((blobId) => !alive.has(blobId));
+  });
+
+/**
+ * Подметает осиротевшие картинки. Возвращает, сколько снесла.
+ *
+ * Зовётся при старте приложения: до появления этой уборки картинки удалённых
+ * проектов оставались в базе навсегда, и у пользователя уже накопилось.
+ */
+export const sweepBlobs = async (): Promise<number> => {
+  const orphans = await collectOrphanBlobs();
+  await Promise.all(orphans.map((blobId) => deleteBlob(blobId)));
+  return orphans.length;
+};
+
+/** Удаляет картинку и её кэши. Вызывать, когда на неё не ссылается ни один документ. */
 export const deleteBlob = async (blobId: Id): Promise<void> => {
   const url = urlCache.get(blobId);
   if (url) URL.revokeObjectURL(url);

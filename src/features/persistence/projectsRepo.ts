@@ -12,6 +12,7 @@
 import { nanoid } from 'nanoid';
 
 import type { BoardDocument, Id, Project } from '@/shared/types/document';
+import { sweepBlobs } from './blobStore';
 import { getDB as db } from './db';
 
 /** Пустой документ новой доски. Вид в начале координат, зум 1:1. */
@@ -91,7 +92,15 @@ export const duplicateProject = async (id: Id): Promise<Project | undefined> => 
   return copy;
 };
 
-/** Необратимо. Документ удаляется вместе с проектом, иначе он останется сиротой навсегда. */
+/**
+ * Необратимо. Документ удаляется вместе с проектом, иначе он останется сиротой
+ * навсегда, а следом — картинки доски: на них уже некому ссылаться.
+ *
+ * Картинки сносятся ПОСЛЕ транзакции и по всей базе разом, а не по списку из
+ * удаляемого документа: одна и та же картинка могла попасть в две доски
+ * дублированием проекта, и удалять её по факту «была в этом документе» значит
+ * пробить дыру в копии.
+ */
 export const deleteProject = async (id: Id): Promise<void> => {
   const tx = (await db()).transaction(['projects', 'documents'], 'readwrite');
   await Promise.all([
@@ -99,6 +108,7 @@ export const deleteProject = async (id: Id): Promise<void> => {
     tx.objectStore('documents').delete(id),
     tx.done,
   ]);
+  await sweepBlobs();
 };
 
 /** Сохраняет документ и двигает updatedAt проекта — от него зависит порядок в списке. */
