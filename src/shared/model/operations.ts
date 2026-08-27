@@ -11,6 +11,20 @@ import {
 } from '@/features/canvas/connectors/geometry';
 import type { BoardDocument, Id, Node } from '@/shared/types/document';
 
+/**
+ * Прозрачность в модели — 0..1 (см. `BaseNode`). Выход за диапазон роняет
+ * отрисовку: Konva кэширует узел в холст нулевого размера и бросает
+ * `InvalidStateError: drawImage` на КАЖДОМ кадре, а не один раз.
+ *
+ * Оболочка зажимает её на входе документа, но диапазон принадлежит модели,
+ * а не одному входу: `updateNode` зовут и из панели свойств, и из инструментов
+ * холста, и мимо санитайзера.
+ */
+export const clampOpacity = (opacity: number): number => {
+  if (!Number.isFinite(opacity)) return 1;
+  return Math.min(1, Math.max(0, opacity));
+};
+
 export function addNode(document: BoardDocument, node: Node): BoardDocument {
   // Инвариант 1: узел обязан попасть И в nodes, И в order.
   return {

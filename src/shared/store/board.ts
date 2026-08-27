@@ -25,7 +25,7 @@ import {
 } from '@/features/canvas/selection/layerOrder';
 import { nodesInBox } from '@/features/canvas/selection/marquee';
 import { boardHistory } from '@/features/history/model/temporal';
-import { removeNodes as removeNodesFromDocument } from '@/shared/model/operations';
+import { clampOpacity, removeNodes as removeNodesFromDocument } from '@/shared/model/operations';
 import type {
   Anchor,
   BoardDocument,
@@ -157,6 +157,10 @@ function boundsOf(document: BoardDocument, ids: Id[]): Rect | null {
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
+/** Приводит патч к тому, что модель считает допустимым. */
+const sanitize = (patch: NodePatch): NodePatch =>
+  patch.opacity === undefined ? patch : { ...patch, opacity: clampOpacity(patch.opacity) };
+
 const notImplemented = (what: string): never => {
   throw new Error(`не реализовано: ${what}`);
 };
@@ -223,18 +227,25 @@ export const useBoardStore = create<BoardState>()(
           }
         }),
 
+      /**
+       * Прозрачность зажимается здесь, а не у вызывающего: `updateNode` зовут
+       * и панель свойств, и инструменты холста, и проверять в каждом месте
+       * — верный способ однажды забыть. Значение вне 0..1 роняет отрисовку
+       * Konva на каждом кадре.
+       */
       updateNode: (id, patch) =>
         set((state) => {
           const node = state.document?.nodes[id];
-          if (node) Object.assign(node, patch);
+          if (node) Object.assign(node, sanitize(patch));
         }),
 
       updateNodes: (ids, patch) =>
         set((state) => {
           if (!state.document) return;
+          const clean = sanitize(patch);
           for (const id of ids) {
             const node = state.document.nodes[id];
-            if (node) Object.assign(node, patch);
+            if (node) Object.assign(node, clean);
           }
         }),
 

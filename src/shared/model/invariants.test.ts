@@ -8,7 +8,7 @@ import {
   checkZoomInRange,
   validateDocument,
 } from '@/shared/model/invariants';
-import { removeNode } from '@/shared/model/operations';
+import { clampOpacity, removeNode } from '@/shared/model/operations';
 
 /**
  * Пять инвариантов из раздела 5 docs/SPEC.md.
@@ -171,5 +171,23 @@ describe('validateDocument — все инварианты разом', () => {
     const d = doc([]);
     d.viewport.zoom = Number.NaN;
     expect(checkZoomInRange(d)).toHaveLength(1);
+  });
+});
+
+describe('clampOpacity — диапазон принадлежит модели, а не одному входу', () => {
+  it('значения внутри диапазона не трогает', () => {
+    expect(clampOpacity(0)).toBe(0);
+    expect(clampOpacity(0.5)).toBe(0.5);
+    expect(clampOpacity(1)).toBe(1);
+  });
+
+  it('зажимает выход за границы: 42 роняет отрисовку Konva на каждом кадре', () => {
+    expect(clampOpacity(42)).toBe(1);
+    expect(clampOpacity(-3)).toBe(0);
+  });
+
+  it('нечисловое приводит к непрозрачному, а не к NaN', () => {
+    expect(clampOpacity(Number.NaN)).toBe(1);
+    expect(clampOpacity(Number.POSITIVE_INFINITY)).toBe(1);
   });
 });
