@@ -142,6 +142,10 @@ Konva видит нажатие на `draggable`-узле раньше, чем �
 `.claude/hooks/` подключены в `.claude/settings.json`:
 
 - `log-prompt.sh` (`UserPromptSubmit`) — пишет каждый промпт в `sessions/$DEV_NAME/ГГГГ-ММ-ДД.md`.
+- `log-response.sh` (`Stop`) — дописывает туда же ответ агента. Текст берёт
+  из транскрипта по `transcript_path`: в полезной нагрузке хука самого ответа
+  нет. Стоит **перед** `gate-stop.sh` — тот умеет вернуть код 2 и не дать
+  сессии закончиться, и тогда ответ остался бы незаписанным.
 - `guard-secrets.sh` / `guard-bash.sh` (`PreToolUse`) — блокируют запись в секреты,
   снос корня, форс-пуш, переключение на `main`.
 - `format-file.sh` (`PostToolUse`) — прогоняет `biome check --write` по изменённому файлу.
