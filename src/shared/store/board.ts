@@ -12,7 +12,9 @@ import { temporal } from 'zundo';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { createConnector } from '@/features/canvas/connectors/connectorTool';
+import { connectorEnds, nodeEndpoint, pointEndpoint } from '@/features/canvas/connectors/geometry';
 import type { Rect, Size } from '@/features/canvas/engine/contract';
+import { DEFAULT_GRID_STEP } from '@/features/canvas/engine/grid';
 import {
   fitToBox,
   panBy as panViewportBy,
@@ -203,6 +205,84 @@ function resyncGroups(document: BoardDocument, touched: Iterable<Id>): void {
   }
 }
 
+/**
+ * Смещение копии от оригинала в мировых единицах.
+ *
+ * Ровно шаг сетки: копия видна как отдельный объект, а не как утолщённый
+ * контур поверх оригинала, и при этом остаётся на сетке — выравнивание,
+ * ради которого объект ставили по узлам, не рассыпается от дублирования.
+ */
+const DUPLICATE_OFFSET = DEFAULT_GRID_STEP;
+
+/**
+ * Копия одного узла: новый id, смещение, перевязанные внутрь копии ссылки.
+ *
+ * `clones` — карта «оригинал → копия», собранная ДО обхода. Без неё связи
+ * не перевязать: ребёнку нужен id копии его группы, которая может ещё не
+ * существовать, а группе — id копий детей.
+ *
+ * `document` — исходный документ, из него берутся координаты концов линии
+ * на момент дублирования.
+ */
+function duplicateNode(
+  source: Node,
+  document: BoardDocument,
+  clones: ReadonlyMap<Id, Id>,
+  id: Id,
+): Node {
+  if (source.type === 'connector') {
+    const copy = structuredClone(source);
+    copy.id = id;
+    const ends = connectorEnds(source, document);
+
+    /**
+     * Конец копии. Скопирован узел на том конце — копия смотрит на копию.
+     * Не скопирован — конец отвязывается в точку, где он был, плюс то же
+     * смещение. Так же ведёт себя удаление узла (инвариант 4), и по той же
+     * причине: линия, оставшаяся привязанной к оригиналу, легла бы одним
+     * концом на исходную и тянула бы за собой чужой узел, а копия обязана
+     * быть самостоятельной.
+     */
+    const endOf = (which: 'from' | 'to'): Endpoint => {
+      const end = source[which];
+      if (end.nodeId !== undefined) {
+        const twin = clones.get(end.nodeId);
+        if (twin !== undefined) return nodeEndpoint(twin, end.anchor ?? 'auto');
+      }
+      const point = end.point ?? ends?.[which] ?? { x: 0, y: 0 };
+      return pointEndpoint({ x: point.x + DUPLICATE_OFFSET, y: point.y + DUPLICATE_OFFSET });
+    };
+
+    copy.from = endOf('from');
+    copy.to = endOf('to');
+    // Инвариант 2: у линии не бывает groupId. По типам его нет вовсе,
+    // но документ мог прийти извне — в копию такое не пускаем.
+    delete (copy as { groupId?: Id }).groupId;
+    return copy;
+  }
+
+  const copy = structuredClone(source);
+  copy.id = id;
+  copy.x += DUPLICATE_OFFSET;
+  copy.y += DUPLICATE_OFFSET;
+
+  // Группа скопирована вместе с узлом — копия входит в копию группы.
+  // Нет — копия выходит из группы: приписать её оригинальной группы нельзя,
+  // та о новом ребёнке не знает, и связь получилась бы односторонней.
+  const twinGroup = copy.groupId === undefined ? undefined : clones.get(copy.groupId);
+  // exactOptionalPropertyTypes: undefined не присвоить, поле убирают.
+  if (twinGroup === undefined) delete copy.groupId;
+  else copy.groupId = twinGroup;
+
+  if (copy.type === 'group') {
+    copy.children = copy.children
+      .map((child) => clones.get(child))
+      .filter((child): child is Id => child !== undefined);
+  }
+
+  return copy;
+}
+
 /** Приводит патч к тому, что модель считает допустимым. */
 const sanitize = (patch: NodePatch): NodePatch =>
   patch.opacity === undefined ? patch : { ...patch, opacity: clampOpacity(patch.opacity) };
@@ -339,7 +419,51 @@ export const useBoardStore = create<BoardState>()(
         }),
       resizeNode: () => notImplemented('resizeNode'),
       rotateNode: () => notImplemented('rotateNode'),
-      duplicateNodes: () => notImplemented('duplicateNodes'),
+      /**
+       * Дублирует выделенное со смещением.
+       *
+       * Группа копируется вместе с содержимым: копия рамки без детей — пустое
+       * место, а не копия. Заблокированные узлы дублируются как есть: замок
+       * защищает оригинал от правки, а копию он не касается — и в копии
+       * сохраняется, чтобы дублирование не работало обходом замка.
+       */
+      duplicateNodes: (ids) => {
+        const document = get().document;
+        if (!document) return [];
+
+        const sources = withGroupDescendants(document, ids).filter((id) => document.nodes[id]);
+        if (sources.length === 0) return [];
+
+        // id копий выдаются заранее, до сборки узлов: перевязка ссылок
+        // требует знать, во что превратился каждый оригинал.
+        const clones = new Map<Id, Id>(sources.map((id) => [id, nanoid()]));
+
+        set((state) => {
+          if (!state.document) return;
+
+          for (const id of sources) {
+            const source = document.nodes[id];
+            const copyId = clones.get(id);
+            if (!source || copyId === undefined) continue;
+
+            const copy = duplicateNode(source, document, clones, copyId);
+            // Инвариант 1: узел обязан попасть И в nodes, И в order.
+            // В конец: копия ложится поверх оригинала, как её и ждут увидеть.
+            state.document.nodes[copyId] = copy;
+            state.document.order.push(copyId);
+          }
+
+          const created = [...clones.values()];
+          // Рамки копий групп считались от смещённых детей и уже верны;
+          // пересчёт нужен на случай, когда рамка оригинала была устаревшей.
+          resyncGroups(state.document, created);
+          // Выделение переезжает на копии — как после group(): дальше человек
+          // работает с тем, что только что создал, а не с оригиналом.
+          state.selection = created;
+        });
+
+        return [...clones.values()];
+      },
 
       // ─── Порядок слоёв: реализовано, зона A ───────────────────────────────
       bringForward: (ids) =>
