@@ -16,7 +16,7 @@ import { Transformer } from 'react-konva';
 
 import { useBoardStore } from '@/shared/store/board';
 
-import { clampSize, keepsAspect, MIN_NODE_SIDE } from './resize';
+import { keepsAspect, MIN_NODE_SIDE } from './resize';
 
 export function SelectionTransformer() {
   const ref = useRef<Konva.Transformer | null>(null);
@@ -25,6 +25,7 @@ export function SelectionTransformer() {
   const selection = useBoardStore((s) => s.selection);
   const nodes = useBoardStore((s) => s.document?.nodes);
   const updateNode = useBoardStore((s) => s.updateNode);
+  const resizeNode = useBoardStore((s) => s.resizeNode);
   const editingNodeId = useBoardStore((s) => s.editingNodeId);
 
   // Shift читаем с клавиатуры, а не из события трансформации: пользователь
@@ -110,25 +111,28 @@ export function SelectionTransformer() {
       const node = document.nodes[id];
       if (!node || node.type === 'connector') continue;
 
-      const box = clampSize({
-        x: shape.x(),
-        y: shape.y(),
-        width: node.width * shape.scaleX(),
-        height: node.height * shape.scaleY(),
-      });
-
-      // Масштаб сбрасываем: размер уехал в модель, второй раз его применять
+      // Масштаб сбрасываем: размер уедет в модель, второй раз его применять
       // нельзя — иначе узел растёт на каждое касание ручки.
+      const scaleX = shape.scaleX();
+      const scaleY = shape.scaleY();
       shape.scaleX(1);
       shape.scaleY(1);
 
-      updateNode(id, {
-        x: box.x,
-        y: box.y,
-        width: box.width,
-        height: box.height,
-        rotation: shape.rotation(),
+      /*
+       * Рамка уходит через `resizeNode`, а не через `updateNode` с четырьмя
+       * полями: правила размера (минимальная сторона, нечисловые значения,
+       * растяжение содержимого группы) живут там одним куском. Здесь их
+       * повторять нельзя — разъедутся.
+       */
+      resizeNode(id, {
+        x: shape.x(),
+        y: shape.y(),
+        width: node.width * scaleX,
+        height: node.height * scaleY,
       });
+
+      // Поворот рамкой не является и в Box не входит — идёт отдельным патчем.
+      updateNode(id, { rotation: shape.rotation() });
     }
   };
 
