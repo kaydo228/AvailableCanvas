@@ -28,6 +28,7 @@ import {
   bringToFront as reorderToFront,
 } from '@/features/canvas/selection/layerOrder';
 import { nodesInBox } from '@/features/canvas/selection/marquee';
+import { clampSize } from '@/features/canvas/selection/resize';
 import { boardHistory } from '@/features/history/model/temporal';
 import {
   clampOpacity,
@@ -287,6 +288,27 @@ function duplicateNode(
 const sanitize = (patch: NodePatch): NodePatch =>
   patch.opacity === undefined ? patch : { ...patch, opacity: clampOpacity(patch.opacity) };
 
+/**
+ * Приводит рамку к тому, что модель считает рамкой.
+ *
+ * Нечисловое поле откатывается к ТЕКУЩЕМУ значению узла, а не в ноль: NaN
+ * приходит из деления на нулевой масштаб в трансформере, и узел, прыгнувший
+ * в начало координат, выглядит как потерянный. Оставить его на месте —
+ * единственный безобидный исход.
+ *
+ * Минимальный размер зажимает `clampSize` из зоны выделения: константа
+ * MIN_NODE_SIDE там уже есть, вторая разъехалась бы с `boundBoxFunc`
+ * трансформера. Отрицательная ширина попадает под тот же зажим — рамка,
+ * вывернутая наизнанку, в модели не существует.
+ */
+const sanitizeBox = (box: Box, current: Box): Box =>
+  clampSize({
+    x: Number.isFinite(box.x) ? box.x : current.x,
+    y: Number.isFinite(box.y) ? box.y : current.y,
+    width: Number.isFinite(box.width) ? box.width : current.width,
+    height: Number.isFinite(box.height) ? box.height : current.height,
+  });
+
 const notImplemented = (what: string): never => {
   throw new Error(`не реализовано: ${what}`);
 };
@@ -417,7 +439,88 @@ export const useBoardStore = create<BoardState>()(
           // Рамки внешних групп, если двигали что-то изнутри.
           resyncGroups(state.document, ids);
         }),
-      resizeNode: () => notImplemented('resizeNode'),
+      /**
+       * Изменение рамки узла. Единственное место, где размер уезжает
+       * в модель: трансформер зовёт именно это действие, а не `updateNode`
+       * с четырьмя полями, — иначе правило про минимальный размер
+       * и про группы пришлось бы повторять на каждом вызывающем.
+       *
+       * ГРУППА растягивается вместе с содержимым. Своей геометрии у неё нет:
+       * рамка производная от состава, и записать в неё новый размер, не тронув
+       * детей, значит соврать — рамка станет больше того, что в ней лежит,
+       * и первый же `resyncGroups` вернёт её обратно.
+       */
+      resizeNode: (id, box) =>
+        set((state) => {
+          const document = state.document;
+          if (!document) return;
+
+          const node = document.nodes[id];
+          // У коннектора рамки нет вовсе (ConnectorNode не наследует BaseNode) —
+          // менять нечего. Молча выходим, а не бросаем: действие зовут по всему
+          // выделению разом, и линия в наборе — обычное дело.
+          if (!node || node.type === 'connector') return;
+
+          if (node.type !== 'group') {
+            Object.assign(node, sanitizeBox(box, node));
+            // Рамка группы-родителя обязана поехать за участником.
+            resyncGroups(document, [id]);
+            return;
+          }
+
+          /*
+           * Считаем от РЕАЛЬНЫХ границ содержимого, а не от хранимого поля:
+           * поле производное и могло устареть (например, документ пришёл
+           * из файла), а масштаб от устаревшей рамки увёл бы состав в сторону.
+           */
+          const before = groupBounds(document, id) ?? {
+            x: node.x,
+            y: node.y,
+            width: node.width,
+            height: node.height,
+          };
+          const after = sanitizeBox(box, before);
+
+          // Нулевая сторона: масштаб от неё — деление на ноль. Тогда группа
+          // только переезжает, размер содержимого остаётся прежним.
+          const scaleX = before.width > 0 ? after.width / before.width : 1;
+          const scaleY = before.height > 0 ? after.height / before.height : 1;
+
+          // Пустая группа: пересчитывать её будет не по чему, поэтому рамку
+          // ставим сразу. Если содержимое есть, resyncGroups ниже её уточнит.
+          Object.assign(node, after);
+
+          for (const childId of withGroupDescendants(document, node.children)) {
+            const child = document.nodes[childId];
+            if (!child) continue;
+            // Коннектор едет за фигурами сам, концами; вложенная группа —
+            // производная, её пересчитает resyncGroups по её же детям.
+            if (child.type === 'connector' || child.type === 'group') continue;
+
+            /*
+             * Положение внутри группы масштабируется вместе с размером:
+             * иначе состав разъехался бы относительно рамки — фигуры выросли,
+             * а промежутки между ними остались прежними.
+             *
+             * clampSize на каждом ребёнке отдельно: при сильном сжатии
+             * пропорция мелкой фигуры важнее, чем то, что её нельзя поймать
+             * мышью. Рамка группы после этого может оказаться чуть больше
+             * запрошенной — потому и пересчитывается по факту, ниже.
+             */
+            Object.assign(
+              child,
+              clampSize({
+                x: after.x + (child.x - before.x) * scaleX,
+                y: after.y + (child.y - before.y) * scaleY,
+                width: child.width * scaleX,
+                height: child.height * scaleY,
+              }),
+            );
+          }
+
+          // По факту получившегося состава — и вверх, до внешних групп.
+          resyncGroups(document, withGroupDescendants(document, node.children));
+        }),
       rotateNode: () => notImplemented('rotateNode'),
       /**
        * Дублирует выделенное со смещением.
