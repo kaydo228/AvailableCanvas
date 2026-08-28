@@ -20,3 +20,7 @@ test-results/
 
 # Промежуточный HTML сборки PDF — рядом с самим PDF он не нужен.
 *.debug.html
+
+# Индекс кодовой базы (эксперимент F-1): артефакты и локальный скилл.
+graphify-out/
+.claude/skills/graphify/
