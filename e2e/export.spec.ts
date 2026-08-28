@@ -184,3 +184,46 @@ test('обрезанный и чужой по версии файл не рон�
   // Ни один битый файл не завёл проект: в списке только исходный.
   await expect(page.getByText('Документ')).toHaveCount(1);
 });
+
+test('картинка по внешнему адресу не скачивается, а отбивается', async ({ page }) => {
+  await openBoard(page, 'Документ');
+  const text = await readFile(await (await exportVia(page, /Весь документ/)).path(), 'utf8');
+
+  await page.getByRole('link', { name: 'Назад к списку' }).click();
+
+  // Ловим ЛЮБОЙ выход наружу: импорт обязан отказать до сети, а не после.
+  const outside: string[] = [];
+  await page.route('**/*', (route) => {
+    const url = route.request().url();
+    if (!url.startsWith('http://localhost') && !url.startsWith('data:')) outside.push(url);
+    return route.abort();
+  });
+
+  const evil = JSON.parse(text);
+  evil.document.nodes.img = {
+    id: 'img',
+    type: 'image',
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    blobId: 'b1',
+    naturalWidth: 10,
+    naturalHeight: 10,
+  };
+  evil.document.order.push('img');
+  evil.images = { b1: 'https://example.invalid/пиксель.gif' };
+
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'Маячок.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(evil)),
+  });
+
+  await expect(page.getByText(/не как data-URL/)).toBeVisible();
+  expect(outside, 'ни одного запроса за пределы localhost').toEqual([]);
+  await expect(page).toHaveURL(/\/$/);
+});

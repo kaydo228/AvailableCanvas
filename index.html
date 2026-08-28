@@ -4,12 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Prostor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!--
+      Шрифты не грузятся из сети: критерий приёмки 12 требует пустую вкладку
+      Network после загрузки, а запрос к fonts.googleapis.com — это исходящий
+      запрос с IP и Referer пользователя. Golos Text и IBM Plex Mono остались
+      первыми в --font-sans/--font-mono: у кого стоят в системе, тот их и видит,
+      остальные получают системный стек из того же объявления.
+    -->
     <!-- Тема ставится до первой отрисовки: иначе тёмная страница моргает белым. -->
     <script>
       try {

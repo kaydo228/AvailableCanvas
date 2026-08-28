@@ -5,7 +5,7 @@
 
 import { expect, test } from 'vitest';
 
-import { doc, shape } from '@/shared/model/fixtures';
+import { connector, doc, shape } from '@/shared/model/fixtures';
 import { BadFile, parseBoardFile } from './fileFormat';
 
 const validFile = () => ({
@@ -113,4 +113,34 @@ test('картинка узла потерялась — файл не прох�
   };
 
   expect(() => parseBoardFile(text(withImage))).toThrow(/картинки для узла img нет в файле/);
+});
+
+test('дубль в order — файл не проходит', () => {
+  const base = validFile();
+  const twice = { ...base, document: { ...base.document, order: ['a', 'a'] } };
+
+  expect(() => parseBoardFile(text(twice))).toThrow(/узел a в order дважды/);
+});
+
+test('линия с привязанными концами открывается, с пустым концом — нет', () => {
+  const linked = {
+    ...validFile(),
+    document: doc([shape('a'), shape('b'), connector('c', 'a', 'b')]),
+  };
+  expect(parseBoardFile(text(linked)).document.order).toEqual(['a', 'b', 'c']);
+
+  const dangling = structuredClone(linked);
+  // Ни nodeId, ни point: инвариант 3 нарушен, линию нечем нарисовать.
+  dangling.document.nodes.c = {
+    ...connector('c', 'a', 'b'),
+    from: { anchor: 'auto' },
+  } as never;
+  expect(() => parseBoardFile(text(dangling))).toThrow(/document\.nodes\.c/);
+
+  const both = structuredClone(linked);
+  both.document.nodes.c = {
+    ...connector('c', 'a', 'b'),
+    to: { nodeId: 'b', point: { x: 5, y: 5 } },
+  } as never;
+  expect(() => parseBoardFile(text(both))).toThrow(/document\.nodes\.c/);
 });

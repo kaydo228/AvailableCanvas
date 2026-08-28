@@ -82,10 +82,18 @@ export const exportJson = async (name: string): Promise<void> => {
 };
 
 const blobFromDataUrl = async (blobId: Id, dataUrl: string): Promise<Blob> => {
+  // Схема проверяется ДО fetch, и это не придирка к формату: fetch по строке
+  // из чужого файла сходит на любой адрес, который там написан. Файл с
+  // `images: {"x": "https://чужой.сайт/пиксель.gif"}` превратил бы импорт
+  // в маячок с IP пользователя — при том что бэкенда у нас нет вовсе.
+  const unreadable = new BadFile(
+    `Картинка ${blobId} записана в файле не как data-URL — прочитать нечем.`,
+  );
+  if (!dataUrl.startsWith('data:image/')) throw unreadable;
   try {
     return await (await fetch(dataUrl)).blob();
   } catch {
-    throw new BadFile(`Картинка ${blobId} записана в файле не как data-URL — прочитать нечем.`);
+    throw unreadable;
   }
 };
 

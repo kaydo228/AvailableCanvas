@@ -12,6 +12,7 @@
 import { nanoid } from 'nanoid';
 
 import type { BoardDocument, Id, Project } from '@/shared/types/document';
+import { deleteBlob } from './blobStore';
 import { getDB as db } from './db';
 
 /** Пустой документ новой доски. Вид в начале координат, зум 1:1. */
@@ -91,14 +92,47 @@ export const duplicateProject = async (id: Id): Promise<Project | undefined> => 
   return copy;
 };
 
-/** Необратимо. Документ удаляется вместе с проектом, иначе он останется сиротой навсегда. */
+const imageBlobIds = (document: BoardDocument): Id[] =>
+  Object.values(document.nodes).flatMap((node) => (node.type === 'image' ? [node.blobId] : []));
+
+/**
+ * Картинки удалённого документа, на которые больше никто не ссылается.
+ *
+ * Просто снести все блобы документа нельзя: `duplicateProject` копирует узлы
+ * как есть, и копия держится за те же `blobId`. Поэтому список сверяется
+ * с оставшимися документами — их к этому моменту в базе уже без удалённого.
+ *
+ * ponytail: линейный проход по всем документам. Досок здесь десятки, а не
+ * миллионы; понадобится быстрее — заводить счётчик ссылок на блоб.
+ */
+const dropOrphanBlobs = async (deleted: BoardDocument): Promise<void> => {
+  const orphans = new Set(imageBlobIds(deleted));
+  if (orphans.size === 0) return;
+
+  for (const document of await (await db()).getAll('documents')) {
+    for (const blobId of imageBlobIds(document)) orphans.delete(blobId);
+  }
+
+  await Promise.all([...orphans].map(deleteBlob));
+};
+
+/**
+ * Необратимо. Документ удаляется вместе с проектом, иначе он останется сиротой
+ * навсегда, — и картинки следом за ним: блоб на 10 МБ, до которого из интерфейса
+ * уже не дотянуться, всё равно занимает квоту браузера.
+ */
 export const deleteProject = async (id: Id): Promise<void> => {
-  const tx = (await db()).transaction(['projects', 'documents'], 'readwrite');
+  const database = await db();
+  const document = await database.get('documents', id);
+
+  const tx = database.transaction(['projects', 'documents'], 'readwrite');
   await Promise.all([
     tx.objectStore('projects').delete(id),
     tx.objectStore('documents').delete(id),
     tx.done,
   ]);
+
+  if (document) await dropOrphanBlobs(document);
 };
 
 /** Сохраняет документ и двигает updatedAt проекта — от него зависит порядок в списке. */
