@@ -127,6 +127,9 @@
   --rule: #dcdfd7;
   --rule-strong: #c3c8bd;
 
+  /* Точки фоновой сетки: холст и миниатюра доски */
+  --grid-dot: #cbd2da;
+
   /* Текст: чернила → карандаш → отметка на полях */
   --ink: #191c1a;
   --pencil: #5d645f;
@@ -160,6 +163,8 @@
     --rule: #343b36;
     --rule-strong: #48504a;
 
+    --grid-dot: #2b312d;
+
     --ink: #e9ece6;
     --pencil: #9ba39c;
     --faint: #737a75;
@@ -187,6 +192,8 @@
 
   --rule: #343b36;
   --rule-strong: #48504a;
+
+  --grid-dot: #2b312d;
 
   --ink: #e9ece6;
   --pencil: #9ba39c;
@@ -220,6 +227,7 @@
   --color-well: var(--well);
   --color-rule: var(--rule);
   --color-rule-strong: var(--rule-strong);
+  --color-grid-dot: var(--grid-dot);
   --color-ink: var(--ink);
   --color-pencil: var(--pencil);
   --color-faint: var(--faint);
@@ -261,7 +269,7 @@
 
 /** Миниатюра доски: та же точечная сетка, что и на холсте. */
 @utility grid-dots {
-  background-image: radial-gradient(circle at 1px 1px, var(--color-rule-strong) 1px, transparent 0);
+  background-image: radial-gradient(circle at 1px 1px, var(--color-grid-dot) 1px, transparent 0);
   background-size: 14px 14px;
 }
 
