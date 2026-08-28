@@ -13,7 +13,8 @@ Prostor — бесконечная доска для диаграмм, заме�
 | `npm run build` | `tsc --noEmit` + сборка |
 | `npm test` | Vitest, один прогон |
 | `npm run test:watch` | Vitest в watch |
-| `npm run e2e` | Playwright, сам поднимает dev-сервер |
+| `npm run e2e` | Playwright, сам поднимает dev-сервер (без замера) |
+| `npm run perf` | замер NFR-01, отдельный проект Playwright в один поток |
 | `npm run typecheck` | только типы |
 | `npm run lint` | Biome — линтер и форматтер сразу |
 
