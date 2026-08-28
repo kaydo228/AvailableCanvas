@@ -16,6 +16,7 @@ import { createProject, saveDocument } from '@/features/persistence/projectsRepo
 import { type Repair, repairDocument } from '@/features/persistence/repair';
 import { useBoardStore } from '@/shared/store/board';
 import type { BoardDocument, Id, Node, Project } from '@/shared/types/document';
+import { downloadUrl, ExportFailed, safeFilename } from '../lib/download';
 import {
   BadFile,
   type BoardFile,
@@ -23,7 +24,6 @@ import {
   FILE_VERSION,
   parseBoardFile,
 } from '../lib/fileFormat';
-import { downloadUrl, ExportFailed, safeFilename } from './exportPng';
 
 const toDataUrl = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {

@@ -12,9 +12,9 @@
  */
 
 import Konva from 'konva';
-
 import { useBoardStore } from '@/shared/store/board';
 import { boundsOf } from '../lib/bounds';
+import { downloadUrl, ExportFailed, safeFilename } from '../lib/download';
 
 export type PngScope = 'board' | 'selection';
 export type PngScale = 1 | 2;
@@ -24,14 +24,6 @@ export type PngScale = 1 | 2;
  * картинку, и это худший вид отказа: файл есть, а в нём ничего.
  */
 const MAX_SIDE = 16_384;
-
-/** Отказ с текстом для пользователя. */
-export class ExportFailed extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ExportFailed';
-  }
-}
 
 /**
  * Дождаться, пока React отдаст изменение стора в Konva и сцена перерисуется.
@@ -44,28 +36,6 @@ const nextFrame = (): Promise<void> =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     setTimeout(resolve, 100);
   });
-
-export const downloadUrl = (url: string, filename: string): void => {
-  const link = window.document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-};
-
-/**
- * Имя файла: русские буквы оставляем, ломающие файловую систему — нет.
- *
- * Отдельно вычищаются форматирующие символы (`\p{Cf}`): среди них метка
- * смены направления письма, которая переворачивает показ имени в загрузках,
- * и «файл<U+202E>gnp.txt» выглядит как «файлtxt.png». Ведущие точки
- * схлопываются: имя «...» давало файл «....prostor.json».
- */
-export const safeFilename = (name: string): string =>
-  name
-    .replace(/[\\/:*?"<>|]/g, '-')
-    .replace(/\p{Cf}/gu, '')
-    .replace(/^\.+/, '')
-    .trim() || 'Доска';
 
 export interface PngOptions {
   scope: PngScope;

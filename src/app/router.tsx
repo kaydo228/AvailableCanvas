@@ -3,13 +3,28 @@
  * Всё, чего нет, ведёт на список — белый экран пользователю показывать нечего.
  */
 
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
-import { CanvasScreen } from '@/app/CanvasScreen';
 import { ProjectsHeader } from '@/app/ProjectsHeader';
 import { ProjectDialogs } from '@/features/projects/dialogs/ProjectDialogs';
 import { ProjectsScreen } from '@/features/projects/ProjectsScreen';
 import { AppToaster } from '@/shared/ui';
+
+/**
+ * Холст грузится отдельным куском и только когда на него зашли.
+ *
+ * Konva — две трети всего бандла, а на списке проектов она не нужна ни разу:
+ * до 28 августа приложение приезжало одним файлом на 905 КБ, и человек,
+ * открывший список, платил за движок холста, которого не увидит.
+ *
+ * `lazy` требует default-экспорт, а у экрана он именованный — трогать сам
+ * экран ради формы импорта не стали, разворачиваем здесь.
+ */
+const CanvasScreen = lazy(async () => {
+  const { CanvasScreen: Screen } = await import('@/app/CanvasScreen');
+  return { default: Screen };
+});
 
 function ProjectsRoute() {
   return (
@@ -33,7 +48,20 @@ export function Router() {
       <AppToaster />
       <Routes>
         <Route path="/" element={<ProjectsRoute />} />
-        <Route path="/p/:projectId" element={<CanvasScreen />} />
+        <Route
+          path="/p/:projectId"
+          element={
+            /*
+              Заглушка намеренно пустая, а не спиннер: холст приезжает
+              за десятки миллисекунд с диска, и мелькнувший на этот срок
+              спиннер читается как поломка, а не как загрузка. Фон совпадает
+              с фоном экрана, поэтому переход выглядит как переход.
+            */
+            <Suspense fallback={<div className="h-screen bg-paper" />}>
+              <CanvasScreen />
+            </Suspense>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -16,6 +16,10 @@ const openBoard = async (page: import('@playwright/test').Page) => {
   await page.getByLabel('Имя проекта').fill('Панель');
   await page.getByRole('button', { name: 'Создать' }).click();
   await expect(page).toHaveURL(/\/p\/[\w-]+$/);
+  // Экран холста приезжает отдельным чанком (ленивый маршрут, 28.08), поэтому
+  // адрес меняется раньше, чем экран смонтирован. Фикстура, положенная до этого
+  // момента, будет затёрта чтением документа из IndexedDB.
+  await expect(page.locator('canvas').first()).toBeVisible();
 
   await page.evaluate(() => {
     const board = window.__board;

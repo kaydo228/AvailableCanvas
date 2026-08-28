@@ -8,7 +8,9 @@
 
 import { Plus } from 'lucide-react';
 
-import { ImportButton } from '@/features/export';
+// Импорт напрямую, а не через `@/features/export`: баррель реэкспортирует
+// и `exportPng`, а тот тянет Konva. На списке проектов холста нет.
+import { ImportButton } from '@/features/export/ui/ImportButton';
 import { useProjectDialogs } from '@/features/projects/dialogsStore';
 import { ThemeToggle } from '@/shared/ui';
 

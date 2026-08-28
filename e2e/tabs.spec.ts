@@ -15,6 +15,10 @@ const create = async (page: import('@playwright/test').Page, name: string) => {
   await page.getByLabel('Имя проекта').fill(name);
   await page.getByRole('button', { name: 'Создать' }).click();
   await expect(page).toHaveURL(/\/p\/[\w-]+$/);
+  // Экран холста приезжает отдельным чанком (ленивый маршрут, 28.08), поэтому
+  // адрес меняется раньше, чем экран смонтирован. Фикстура, положенная до этого
+  // момента, будет затёрта чтением документа из IndexedDB.
+  await expect(page.locator('canvas').first()).toBeVisible();
   return page.url().split('/p/')[1] as string;
 };
 

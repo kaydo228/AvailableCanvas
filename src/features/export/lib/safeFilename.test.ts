@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { safeFilename } from './exportPng';
+import { safeFilename } from './download';
 
 describe('safeFilename', () => {
   test('обычное имя не трогается', () => {

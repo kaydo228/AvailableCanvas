@@ -73,6 +73,10 @@ const importBoard = async (page: import('@playwright/test').Page, file: unknown)
     buffer: Buffer.from(JSON.stringify(file), 'utf8'),
   });
   await expect(page).toHaveURL(/\/p\/[\w-]+$/);
+  // Экран холста приезжает отдельным чанком (ленивый маршрут, 28.08), поэтому
+  // адрес меняется раньше, чем экран смонтирован. Фикстура, положенная до этого
+  // момента, будет затёрта чтением документа из IndexedDB.
+  await expect(page.locator('canvas').first()).toBeVisible();
 };
 
 test.beforeEach(async ({ page }) => {
