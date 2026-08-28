@@ -80,3 +80,60 @@ test('чужой формат и перевес отбиваются с внят
 
   expect(result).toEqual({ pdf: 'type', huge: 'size' });
 });
+
+test('удаление проекта уносит его картинки, но не те, что держит копия', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    const { putImage, getBlob } = await import('/src/features/persistence/blobStore.ts');
+    const { createProject, deleteProject, duplicateProject, saveDocument, getDocument } =
+      await import('/src/features/persistence/projectsRepo.ts');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 2;
+    canvas.getContext('2d')?.fillRect(0, 0, 2, 2);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => (result ? resolve(result) : reject(new Error('toBlob вернул null'))),
+        'image/png',
+      );
+    });
+
+    const stored = await putImage(blob);
+    const project = await createProject('С картинкой');
+    const board = await getDocument(project.id);
+    if (!board) throw new Error('документ не создался');
+
+    board.nodes.img = {
+      id: 'img',
+      type: 'image',
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 2,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      blobId: stored.blobId,
+      naturalWidth: stored.naturalWidth,
+      naturalHeight: stored.naturalHeight,
+    };
+    board.order.push('img');
+    await saveDocument(board);
+
+    // Копия держится за ТОТ ЖЕ блоб — удаление оригинала не должно его трогать.
+    const copy = await duplicateProject(project.id);
+    if (!copy) throw new Error('копия не создалась');
+
+    await deleteProject(project.id);
+    const afterFirst = await getBlob(stored.blobId);
+
+    await deleteProject(copy.id);
+    const afterSecond = await getBlob(stored.blobId);
+
+    return { keptForCopy: afterFirst !== undefined, goneWithLast: afterSecond === undefined };
+  });
+
+  expect(result).toEqual({ keptForCopy: true, goneWithLast: true });
+});
