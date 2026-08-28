@@ -3,10 +3,12 @@ import { connector, doc, shape } from '@/shared/model/fixtures';
 import {
   checkConnectorsNotGrouped,
   checkEndpointExclusive,
+  checkEndpointsExclusive,
   checkOrderMatchesNodes,
   checkZoomInRange,
+  validateDocument,
 } from '@/shared/model/invariants';
-import { removeNode } from '@/shared/model/operations';
+import { clampOpacity, removeNode } from '@/shared/model/operations';
 
 /**
  * Пять инвариантов из раздела 5 docs/SPEC.md.
@@ -134,5 +136,58 @@ describe('инвариант 5 — zoom в диапазоне [0.1, 4]', () => {
     const d = doc([]);
     d.viewport.zoom = 8;
     expect(checkZoomInRange(d)).toHaveLength(1);
+  });
+});
+
+describe('validateDocument — все инварианты разом', () => {
+  it('здоровый документ не даёт ни одного нарушения', () => {
+    const d = doc([shape('a'), shape('b'), connector('c', 'a', 'b')]);
+    expect(validateDocument(d)).toEqual([]);
+  });
+
+  it('собирает нарушения разных правил вместе', () => {
+    const d = doc([shape('a')]);
+    d.order.push('призрак');
+    d.viewport.zoom = 99;
+
+    const violations = validateDocument(d);
+    expect(violations.map((v) => v.rule).sort()).toEqual([1, 5]);
+  });
+
+  it('находит концы линии, заданные не ровно одним способом', () => {
+    const d = doc([shape('a'), connector('c', 'a', 'a')]);
+    const c = d.nodes.c;
+    if (c?.type === 'connector') {
+      c.from = { nodeId: 'a', point: { x: 1, y: 1 } };
+      c.to = {};
+    }
+
+    const violations = checkEndpointsExclusive(d);
+    expect(violations).toHaveLength(2);
+    expect(violations.every((v) => v.rule === 3)).toBe(true);
+  });
+
+  it('NaN в зуме ловится: обычное сравнение с границами его пропускает', () => {
+    const d = doc([]);
+    d.viewport.zoom = Number.NaN;
+    expect(checkZoomInRange(d)).toHaveLength(1);
+  });
+});
+
+describe('clampOpacity — диапазон принадлежит модели, а не одному входу', () => {
+  it('значения внутри диапазона не трогает', () => {
+    expect(clampOpacity(0)).toBe(0);
+    expect(clampOpacity(0.5)).toBe(0.5);
+    expect(clampOpacity(1)).toBe(1);
+  });
+
+  it('зажимает выход за границы: 42 роняет отрисовку Konva на каждом кадре', () => {
+    expect(clampOpacity(42)).toBe(1);
+    expect(clampOpacity(-3)).toBe(0);
+  });
+
+  it('нечисловое приводит к непрозрачному, а не к NaN', () => {
+    expect(clampOpacity(Number.NaN)).toBe(1);
+    expect(clampOpacity(Number.POSITIVE_INFINITY)).toBe(1);
   });
 });

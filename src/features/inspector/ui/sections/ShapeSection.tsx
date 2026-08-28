@@ -1,6 +1,6 @@
 /** Секция фигуры: форма, заливка, обводка, скругление, подпись. */
 
-import { Circle, Diamond, Square, Squircle, Triangle } from 'lucide-react';
+import { Circle, Diamond, Hexagon, Octagon, Square, Squircle, Triangle } from 'lucide-react';
 import {
   ColorField,
   NumberField,
@@ -18,6 +18,10 @@ const SHAPE_OPTIONS = [
   { value: 'ellipse', label: 'Эллипс', icon: <Circle size={14} /> },
   { value: 'triangle', label: 'Треугольник', icon: <Triangle size={14} /> },
   { value: 'diamond', label: 'Ромб', icon: <Diamond size={14} /> },
+  { value: 'hexagon', label: 'Шестиугольник', icon: <Hexagon size={14} /> },
+  // Иконки семиугольника в lucide нет — восьмиугольник ближе всего
+  // по силуэту, а подпись всё равно называет форму словом.
+  { value: 'heptagon', label: 'Семиугольник', icon: <Octagon size={14} /> },
 ];
 
 const FILL_PRESETS = [

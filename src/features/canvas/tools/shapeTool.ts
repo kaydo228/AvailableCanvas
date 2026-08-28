@@ -15,7 +15,7 @@ import type { Rect, WorldPoint } from '@/features/canvas/engine/contract';
 import { isClick, normalizeRect, rectAround, squareRect } from '@/features/canvas/tools/geometry';
 import type { ShapeNode } from '@/shared/types/document';
 
-/** Пять форм MVP из FR-03. Синоним, чтобы не писать `ShapeNode['shape']` везде. */
+/** Формы из FR-03. Синоним, чтобы не писать `ShapeNode['shape']` везде. */
 export type ShapeKind = ShapeNode['shape'];
 
 /** Размер фигуры, созданной одиночным кликом. Узел центрируется по точке. */

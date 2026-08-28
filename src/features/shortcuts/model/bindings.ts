@@ -50,9 +50,9 @@ export interface Shortcut {
   group: ShortcutGroup;
   /**
    * Что делать. `undefined` — клавиша описана в ТЗ, но опереться пока не на что:
-   * либо действия нет в общем сторе вовсе (отмена, буфер обмена — это FR-10),
+   * либо действия нет в общем сторе вовсе (буфер обмена — это FR-10),
    * либо оно есть сигнатурой, но реализовано заглушкой зоны A, которая бросает
-   * исключение (`duplicateNodes`, `group`, `ungroup`, порядок слоёв).
+   * исключение.
    *
    * Такие НЕ перехватываются и показаны в справке приглушённо. Съеденный Cmd+Z,
    * который молча ничего не делает, хуже несделанного; нажатие на заглушку,
@@ -66,6 +66,19 @@ export interface Shortcut {
 const NUDGE_STEP = 1;
 const NUDGE_STEP_FAST = 10;
 
+/**
+ * Выделенное без заблокированного.
+ *
+ * Замок соблюдался только холстом (`draggable`, рамка выделения), а клавиши
+ * его не знали вовсе: Delete сносил заблокированный узел, стрелки его двигали.
+ * Проверка стоит здесь, в зоне B, а не в действиях стора — те принадлежат
+ * зоне A, и лезть в них ради этого не нужно.
+ */
+const movable = ({ selection, nodes }: ShortcutContext): Id[] => {
+  const locked = new Set(nodes.filter((node) => node.locked).map((node) => node.id));
+  return selection.filter((id) => !locked.has(id));
+};
+
 /** Пара «стрелка» и «Shift+стрелка» одной строкой. */
 const nudge = (keys: string, arrow: string, title: string, dx: number, dy: number): Shortcut[] => [
   {
@@ -73,10 +86,9 @@ const nudge = (keys: string, arrow: string, title: string, dx: number, dy: numbe
     hint: arrow,
     title,
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) {
-        actions.moveNodes(selection, dx * NUDGE_STEP, dy * NUDGE_STEP);
-      }
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.moveNodes(ids, dx * NUDGE_STEP, dy * NUDGE_STEP);
     },
   },
   {
@@ -84,10 +96,9 @@ const nudge = (keys: string, arrow: string, title: string, dx: number, dy: numbe
     hint: `Shift+${arrow}`,
     title: `${title} на 10`,
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) {
-        actions.moveNodes(selection, dx * NUDGE_STEP_FAST, dy * NUDGE_STEP_FAST);
-      }
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.moveNodes(ids, dx * NUDGE_STEP_FAST, dy * NUDGE_STEP_FAST);
     },
   },
 ];
@@ -109,6 +120,11 @@ export const SHORTCUTS: readonly Shortcut[] = [
   tool('KeyR', 'R', 'Прямоугольник', 'rect'),
   tool('KeyO', 'O', 'Эллипс', 'ellipse'),
   tool('KeyD', 'D', 'Ромб', 'diamond'),
+  tool('KeyX', 'X', 'Шестиугольник', 'hexagon'),
+  // Цифра, а не буква: свободных мнемоничных букв не осталось, а «7»
+  // читается однозначно. Одиночные цифры ничем не заняты — под вид
+  // отведены только сочетания с $mod.
+  tool('Digit7', '7', 'Семиугольник', 'heptagon'),
   tool('KeyL', 'L', 'Линия', 'connector'),
   tool('KeyI', 'I', 'Изображение', 'image'),
 
@@ -129,14 +145,27 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   { keys: '$mod+KeyC', hint: '$mod+C', title: 'Копировать', group: 'Правка' },
   { keys: '$mod+KeyV', hint: '$mod+V', title: 'Вставить', group: 'Правка' },
-  { keys: '$mod+KeyD', hint: '$mod+D', title: 'Дублировать', group: 'Правка' },
+  {
+    keys: '$mod+KeyD',
+    hint: '$mod+D',
+    title: 'Дублировать',
+    group: 'Правка',
+    // Заблокированное здесь НЕ отфильтровано, в отличие от Delete и стрелок:
+    // те меняют сам узел, а дублирование его не трогает. Копировать
+    // защищённый от правки объект незачем запрещать — замок уезжает в копию,
+    // и снять его можно в инспекторе.
+    run: (actions, { selection }) => {
+      if (selection.length > 0) actions.duplicateNodes(selection);
+    },
+  },
   {
     keys: 'Delete',
     hint: 'Delete',
     title: 'Удалить выделенное',
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) actions.removeNodes(selection);
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.removeNodes(ids);
     },
   },
   {
@@ -144,8 +173,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
     hint: 'Backspace',
     title: 'Удалить выделенное',
     group: 'Правка',
-    run: (actions, { selection }) => {
-      if (selection.length > 0) actions.removeNodes(selection);
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 0) actions.removeNodes(ids);
     },
   },
   {
@@ -155,8 +185,30 @@ export const SHORTCUTS: readonly Shortcut[] = [
     group: 'Правка',
     run: (actions) => actions.selectAll(),
   },
-  { keys: '$mod+KeyG', hint: '$mod+G', title: 'Сгруппировать', group: 'Правка' },
-  { keys: '$mod+Shift+KeyG', hint: '$mod+Shift+G', title: 'Разгруппировать', group: 'Правка' },
+  {
+    keys: '$mod+KeyG',
+    hint: '$mod+G',
+    title: 'Сгруппировать',
+    group: 'Правка',
+    // Строка ждала реализации в сторе — см. комментарий к `run` выше.
+    run: (actions, context) => {
+      const ids = movable(context);
+      if (ids.length > 1) actions.group(ids);
+    },
+  },
+  {
+    keys: '$mod+Shift+KeyG',
+    hint: '$mod+Shift+G',
+    title: 'Разгруппировать',
+    group: 'Правка',
+    run: (actions, { nodes }) => {
+      // Разбираем все группы, попавшие в выделение: пользователь мог выделить
+      // рамкой несколько сразу, и распустить только первую было бы странно.
+      for (const node of nodes) {
+        if (node.type === 'group') actions.ungroup(node.id);
+      }
+    },
+  },
 
   // ── Слои ──────────────────────────────────────────────────────────────
   {

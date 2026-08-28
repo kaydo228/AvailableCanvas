@@ -43,25 +43,17 @@ const box = {
   groupId: z.string().optional(),
 };
 
-// Инвариант 3 из модели: у конца задан РОВНО один из nodeId и point.
-// Без этой проверки конец без обоих проезжает импорт, connectorPoints не может
-// посчитать маршрут, и ConnectorView просто ничего не рисует: узел в документе
-// есть, на доске его нет, сказать об этом некому.
-const endpoint = z
-  .object({
-    nodeId: z.string().optional(),
-    anchor: z.enum(['top', 'right', 'bottom', 'left', 'auto']).optional(),
-    point: z.object({ x: z.number(), y: z.number() }).optional(),
-  })
-  .refine((value) => (value.nodeId === undefined) !== (value.point === undefined), {
-    message: 'у конца линии должен быть ровно один из nodeId и point',
-  });
+const endpoint = z.object({
+  nodeId: z.string().optional(),
+  anchor: z.enum(['top', 'right', 'bottom', 'left', 'auto']).optional(),
+  point: z.object({ x: z.number(), y: z.number() }).optional(),
+});
 
 const node = z.discriminatedUnion('type', [
   z.object({
     ...box,
     type: z.literal('shape'),
-    shape: z.enum(['rect', 'roundRect', 'ellipse', 'triangle', 'diamond']),
+    shape: z.enum(['rect', 'roundRect', 'ellipse', 'triangle', 'diamond', 'hexagon', 'heptagon']),
     fill: z.string(),
     stroke: z.string(),
     strokeWidth: z.number(),
@@ -103,41 +95,30 @@ const node = z.discriminatedUnion('type', [
   }),
 ]);
 
-const documentSchema = z
-  .object({
-    projectId: z.string(),
-    schemaVersion: z.literal(DOCUMENT_VERSION),
-    nodes: z.record(z.string(), node),
-    order: z.array(z.string()),
-    viewport: z.object({ x: z.number(), y: z.number(), zoom: z.number() }),
-    background: z.object({
-      color: z.string(),
-      grid: z.enum(['dots', 'lines', 'none']),
-    }),
-  })
-  // Инвариант 1 из модели: order и nodes соответствуют один к одному. Схема
-  // его проверяет, потому что документ, где они разъехались, откроется пустым
-  // или потеряет узлы молча — и виноват будет импорт, а не файл.
-  .superRefine((value, ctx) => {
-    const inOrder = new Set<string>();
-    for (const id of value.order) {
-      if (!value.nodes[id]) {
-        ctx.addIssue({ code: 'custom', path: ['order'], message: `узла ${id} нет в nodes` });
-      }
-      // Соответствие взаимно однозначное: дубль в order проходит обе проверки
-      // ниже, но рисует узел дважды с одним React-ключом, а после удаления
-      // оставляет в order висячий id.
-      if (inOrder.has(id)) {
-        ctx.addIssue({ code: 'custom', path: ['order'], message: `узел ${id} в order дважды` });
-      }
-      inOrder.add(id);
-    }
-    for (const id of Object.keys(value.nodes)) {
-      if (!inOrder.has(id)) {
-        ctx.addIssue({ code: 'custom', path: ['nodes', id], message: `узла ${id} нет в order` });
-      }
-    }
-  });
+/**
+ * Инвариант 1 (`order` и `nodes` один к одному) схема НЕ проверяет — намеренно.
+ *
+ * Раньше проверяла и отвечала отказом. Причина была верной: документ,
+ * где они разъехались, откроется пустым или потеряет узлы молча, и виноват
+ * будет импорт, а не файл. Но молчания больше нет — `persistence/repair`
+ * сводит `order` и `nodes` обратно и докладывает об этом тостом.
+ *
+ * Оставить отказ здесь значило бы развести два входа: файл с висячим id
+ * отвергается, а точно такой же документ из IndexedDB чинится. Тот же самый
+ * файл человек и получил из нашего же экспорта — отказывать ему в открытии
+ * собственной доски вместо починки неправильно.
+ */
+const documentSchema = z.object({
+  projectId: z.string(),
+  schemaVersion: z.literal(DOCUMENT_VERSION),
+  nodes: z.record(z.string(), node),
+  order: z.array(z.string()),
+  viewport: z.object({ x: z.number(), y: z.number(), zoom: z.number() }),
+  background: z.object({
+    color: z.string(),
+    grid: z.enum(['dots', 'lines', 'none']),
+  }),
+});
 
 export const boardFileSchema = z
   .object({

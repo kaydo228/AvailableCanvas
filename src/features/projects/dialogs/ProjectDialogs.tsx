@@ -27,12 +27,17 @@ import {
   deleteProject,
   duplicateProject,
   getProject,
+  isBlankName,
+  MAX_PROJECT_NAME,
   renameProject,
 } from '@/features/persistence';
 import { useProjectDialogs } from '@/features/projects/dialogsStore';
 import type { Id } from '@/shared/types/document';
 
 const DEFAULT_NAME = 'Новый проект';
+
+/** Проект исчез между открытием диалога и подтверждением — обычно из соседней вкладки. */
+const GONE = 'Проект уже удалён — обновите список.';
 
 const OVERLAY = 'fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]';
 const CONTENT =
@@ -76,15 +81,22 @@ function useWriteOnce() {
   return [busy, run] as const;
 }
 
-/** Имя проекта для заголовков и подтверждений. Пока грузится — пустая строка. */
-function useProjectName(projectId: Id) {
-  const [name, setName] = useState('');
+/**
+ * Имя проекта для заголовков и подтверждений.
+ *
+ * `undefined` — ещё грузим, `null` — проекта нет. Раньше оба случая давали
+ * пустую строку, и диалог дублирования писал «Копия проекта «»» одинаково
+ * и во время загрузки, и над удалённым проектом.
+ */
+function useProjectName(projectId: Id): string | null | undefined {
+  const [name, setName] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     let alive = true;
+    setName(undefined);
     getProject(projectId)
       .then((project) => {
-        if (alive) setName(project?.name ?? '');
+        if (alive) setName(project?.name ?? null);
       })
       .catch(() => toast.error('Не удалось прочитать проект'));
     return () => {
@@ -94,6 +106,10 @@ function useProjectName(projectId: Id) {
 
   return name;
 }
+
+/** Как показать имя, пока оно грузится или уже не существует. */
+const showName = (name: string | null | undefined): string =>
+  name === undefined ? '…' : (name ?? 'удалённый проект');
 
 interface NameDialogProps {
   title: string;
@@ -115,6 +131,9 @@ function NameDialog({ title, description, initial, confirmLabel, onConfirm }: Na
     setName(initial);
   }, [initial]);
 
+  // Не `trim()`: имя из zero-width пробелов его переживает и даёт карточку
+  // без подписи, которую в списке не отличить от соседних.
+  const blank = isBlankName(name);
   const trimmed = name.trim();
 
   return (
@@ -136,7 +155,7 @@ function NameDialog({ title, description, initial, confirmLabel, onConfirm }: Na
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              if (!trimmed) return;
+              if (blank) return;
               run(() => onConfirm(trimmed));
             }}
           >
@@ -146,13 +165,13 @@ function NameDialog({ title, description, initial, confirmLabel, onConfirm }: Na
               value={name}
               onChange={(event) => setName(event.target.value)}
               aria-label="Имя проекта"
-              maxLength={120}
+              maxLength={MAX_PROJECT_NAME}
             />
             <div className={FOOTER}>
               <button type="button" className={BTN_GHOST} onClick={close}>
                 Отмена
               </button>
-              <button type="submit" className={BTN_PRIMARY} disabled={busy || !trimmed}>
+              <button type="submit" className={BTN_PRIMARY} disabled={busy || blank}>
                 {confirmLabel}
               </button>
             </div>
@@ -193,10 +212,15 @@ function RenameDialog({ projectId }: { projectId: Id }) {
     <NameDialog
       title="Переименовать проект"
       description="Новое имя появится в списке сразу."
-      initial={current}
+      initial={current ?? ''}
       confirmLabel="Сохранить"
       onConfirm={async (name) => {
-        await renameProject(projectId, name);
+        // Отказ показываем, а диалог оставляем открытым: закрыть его молча
+        // значит соврать, что переименование прошло.
+        if (!(await renameProject(projectId, name))) {
+          bumpRevision();
+          throw new Error(GONE);
+        }
         bumpRevision();
         close();
       }}
@@ -211,8 +235,9 @@ function DuplicateDialog({ projectId }: { projectId: Id }) {
   const [busy, run] = useWriteOnce();
 
   const confirm = async () => {
-    await duplicateProject(projectId);
+    const copy = await duplicateProject(projectId);
     bumpRevision();
+    if (!copy) throw new Error(GONE);
     close();
   };
 
@@ -223,8 +248,8 @@ function DuplicateDialog({ projectId }: { projectId: Id }) {
         <Dialog.Content className={CONTENT}>
           <Dialog.Title className={TITLE}>Дублировать проект</Dialog.Title>
           <Dialog.Description className={DESCRIPTION}>
-            Копия проекта «{name}» появится в списке под именем «{name} — копия» вместе со всем
-            содержимым доски.
+            Копия проекта «{showName(name)}» появится в списке под именем «{showName(name)} — копия»
+            вместе со всем содержимым доски.
           </Dialog.Description>
           <div className={FOOTER}>
             <button type="button" className={BTN_GHOST} onClick={close}>
@@ -233,7 +258,7 @@ function DuplicateDialog({ projectId }: { projectId: Id }) {
             <button
               type="button"
               className={BTN_PRIMARY}
-              disabled={busy}
+              disabled={busy || name === undefined}
               onClick={() => run(confirm)}
             >
               Дублировать
@@ -259,7 +284,9 @@ function DeleteDialog({ projectId }: { projectId: Id }) {
           <div className="flex gap-3">
             <TriangleAlert className="mt-0.5 shrink-0 text-signal" size={20} aria-hidden />
             <div>
-              <AlertDialog.Title className={TITLE}>Удалить проект «{name}»?</AlertDialog.Title>
+              <AlertDialog.Title className={TITLE}>
+                Удалить проект «{showName(name)}»?
+              </AlertDialog.Title>
               <AlertDialog.Description className={DESCRIPTION}>
                 Проект и вся его доска будут удалены навсегда. Отменить это действие нельзя.
               </AlertDialog.Description>

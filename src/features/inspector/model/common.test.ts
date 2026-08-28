@@ -151,3 +151,26 @@ describe('ключ TextStyle зависит от типа', () => {
     expect(textStyleKey(node as Node)).toBe(expected);
   });
 });
+
+describe('группа при множественном выделении', () => {
+  const group = (id: string): Node => ({
+    id,
+    type: 'group',
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    children: [],
+  });
+
+  test('геометрию у группы не показываем: сдвиг рамки не двигает детей', () => {
+    expect(commonFields([group('g')])).toEqual(['opacity', 'locked']);
+  });
+
+  test('группа рядом с фигурой тоже прячет геометрию у всего выделения', () => {
+    expect(commonFields([group('g'), shape('a')])).toEqual(['opacity', 'locked']);
+  });
+});

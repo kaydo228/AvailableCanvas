@@ -19,7 +19,7 @@ import { stickyFromDrag } from './stickyTool';
 import { textFromDrag } from './textTool';
 
 /** Инструменты, которые создают узлы. Остальные жест не перехватывают. */
-const CREATING = new Set(['rect', 'ellipse', 'diamond', 'text', 'sticky']);
+const CREATING = new Set(['rect', 'ellipse', 'diamond', 'hexagon', 'heptagon', 'text', 'sticky']);
 
 export function useToolController() {
   const activeTool = useBoardStore((s) => s.activeTool);
@@ -58,6 +58,10 @@ export function useToolController() {
           return shapeFromDrag(from, to, 'ellipse', shiftKey, zoom);
         case 'diamond':
           return shapeFromDrag(from, to, 'diamond', shiftKey, zoom);
+        case 'hexagon':
+          return shapeFromDrag(from, to, 'hexagon', shiftKey, zoom);
+        case 'heptagon':
+          return shapeFromDrag(from, to, 'heptagon', shiftKey, zoom);
         case 'text':
           return textFromDrag(from, to, zoom);
         case 'sticky':

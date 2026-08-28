@@ -11,8 +11,9 @@
  * удаление на одной сломает другую.
  */
 
-import { getBlob, putImage } from '@/features/persistence/blobStore';
+import { deleteBlob, getBlob, putImage } from '@/features/persistence/blobStore';
 import { createProject, saveDocument } from '@/features/persistence/projectsRepo';
+import { type Repair, repairDocument } from '@/features/persistence/repair';
 import { useBoardStore } from '@/shared/store/board';
 import type { BoardDocument, Id, Node, Project } from '@/shared/types/document';
 import {
@@ -81,19 +82,25 @@ export const exportJson = async (name: string): Promise<void> => {
   }
 };
 
+/**
+ * Читает картинку из файла.
+ *
+ * Проверка префикса — не формальность. `fetch` берёт любую строку, и без неё
+ * файл с `images: {"x": "http://чужой.хост/beacon"}` заставлял приложение
+ * сходить по этому адресу при открытии доски: маячок «файл открыт» плюс запрос
+ * по адресу, доступному из сети того, кто открыл. Ни один узел на такую запись
+ * ссылаться не обязан — старый цикл шёл по `images`, а не по узлам.
+ */
 const blobFromDataUrl = async (blobId: Id, dataUrl: string): Promise<Blob> => {
-  // Схема проверяется ДО fetch, и это не придирка к формату: fetch по строке
-  // из чужого файла сходит на любой адрес, который там написан. Файл с
-  // `images: {"x": "https://чужой.сайт/пиксель.gif"}` превратил бы импорт
-  // в маячок с IP пользователя — при том что бэкенда у нас нет вовсе.
-  const unreadable = new BadFile(
-    `Картинка ${blobId} записана в файле не как data-URL — прочитать нечем.`,
-  );
-  if (!dataUrl.startsWith('data:image/')) throw unreadable;
+  if (!dataUrl.startsWith('data:image/')) {
+    throw new BadFile(
+      `Картинка ${blobId} записана в файле не как data-URL картинки — прочитать нечем.`,
+    );
+  }
   try {
     return await (await fetch(dataUrl)).blob();
   } catch {
-    throw unreadable;
+    throw new BadFile(`Картинка ${blobId} записана в файле не как data-URL — прочитать нечем.`);
   }
 };
 
@@ -106,33 +113,61 @@ const remapImages = (nodes: Record<Id, Node>, remap: Map<Id, Id>): Record<Id, No
     ]),
   );
 
+export interface ImportResult {
+  project: Project;
+  /** Что пришлось поправить в документе. Пусто — файл был в порядке. */
+  repairs: Repair[];
+}
+
 /**
  * Импортирует файл в НОВЫЙ проект. Существующие доски не трогает: импорт,
  * который молча перезаписывает открытую доску, теряет чужую работу.
  *
+ * Документ проходит через `repairDocument`: схема ловит структуру, но не
+ * инварианты модели, и файл с `zoom: 0` или дублями в `order` до этого
+ * уезжал в хранилище как есть. Список починок возвращается наружу — молча
+ * править чужой файл нельзя, человек должен знать, что получил не то,
+ * что отдавали.
+ *
  * @throws BadFile — файл не прошёл проверку, текст показывать пользователю.
  * @throws ImageRejected — картинка внутри файла не проходит по формату или размеру.
  */
-export const importJson = async (file: File): Promise<Project> => {
+export const importJson = async (file: File): Promise<ImportResult> => {
   const parsed = parseBoardFile(await file.text());
+
+  // Перекладываем только те картинки, на которые ссылается хоть один узел.
+  // Обход по всему `images` означал, что запись, не нужную ни одному узлу,
+  // приложение всё равно пойдёт читать — этим и пользовался маячок.
+  const needed = new Set<Id>();
+  for (const node of Object.values(parsed.document.nodes)) {
+    if (node.type === 'image') needed.add(node.blobId);
+  }
 
   // Картинки перекладываются ДО создания проекта: если одна из них не пройдёт
   // проверку putImage, лучше не оставлять после себя пустой проект в списке.
+  // Уже записанные при этом сносятся — иначе каждая повторная попытка
+  // импорта того же файла добавляла бы в базу ещё один осиротевший блоб.
   const remap = new Map<Id, Id>();
-  for (const [blobId, dataUrl] of Object.entries(parsed.images)) {
-    const blob = await blobFromDataUrl(blobId, dataUrl);
-    const stored = await putImage(blob);
-    remap.set(blobId, stored.blobId);
+  try {
+    for (const [blobId, dataUrl] of Object.entries(parsed.images)) {
+      if (!needed.has(blobId)) continue;
+      const blob = await blobFromDataUrl(blobId, dataUrl);
+      const stored = await putImage(blob);
+      remap.set(blobId, stored.blobId);
+    }
+  } catch (error) {
+    await Promise.all([...remap.values()].map((id) => deleteBlob(id)));
+    throw error;
   }
 
   const project = await createProject(parsed.name);
 
-  const document: BoardDocument = {
+  const { document, repairs } = repairDocument({
     ...parsed.document,
     projectId: project.id,
     nodes: remapImages(parsed.document.nodes as Record<Id, Node>, remap),
-  };
+  } as BoardDocument);
 
   await saveDocument(document);
-  return project;
+  return { project, repairs };
 };

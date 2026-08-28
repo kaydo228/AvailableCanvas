@@ -9,13 +9,15 @@
 import { ChevronLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
+import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage } from '@/features/canvas/engine/CanvasStage';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
-import { getDocument, getProject } from '@/features/persistence';
-import { useAutosave } from '@/features/persistence/autosave';
+import { getDocument, getProject, releaseImageCache, saveDocument } from '@/features/persistence';
+import { beginSaveSession, endSaveSession, useAutosave } from '@/features/persistence/autosave';
+import { describeRepairs, repairDocument } from '@/features/persistence/repair';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
 import { HelpDialog, useShortcuts } from '@/features/shortcuts';
 import { useBoardStore } from '@/shared/store/board';
@@ -29,6 +31,7 @@ export function CanvasScreen() {
   const [state, setState] = useState<LoadState>(undefined);
 
   const loadDocument = useBoardStore((s) => s.loadDocument);
+  const closeDocument = useBoardStore((s) => s.closeDocument);
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
   useAutosave();
@@ -49,23 +52,60 @@ export function CanvasScreen() {
     let cancelled = false;
     setState(undefined);
 
-    Promise.all([getProject(projectId), getDocument(projectId)]).then(([project, document]) => {
+    const open = async () => {
+      const [project, stored] = await Promise.all([getProject(projectId), getDocument(projectId)]);
       if (cancelled) return;
-      if (!project || !document) {
+      if (!project || !stored) {
         setState(null);
         return;
       }
+
+      // Документ из хранилища проверяется наравне с импортированным: до сих пор
+      // он попадал в стор без единой проверки, и порча, записанная старой
+      // версией, так и оставалась в базе. Починенное дописываем сразу, иначе
+      // тот же документ будет чиниться при каждом открытии.
+      const { document, repairs } = repairDocument(stored);
+      let openedAt = project.updatedAt;
+
+      if (repairs.length > 0) {
+        // Запись починки двигает updatedAt, и сессию надо открывать уже
+        // с новым значением — иначе первое же автосохранение решит, что
+        // документ переписала другая вкладка.
+        const outcome = await saveDocument(document, project.updatedAt);
+        if (outcome.ok) openedAt = outcome.updatedAt;
+        if (cancelled) return;
+        toast.warning('Доска была повреждена, пришлось поправить', {
+          description: describeRepairs(repairs),
+          duration: 15_000,
+        });
+      }
+
+      // Вкладка объявляет, с каким updatedAt открыла проект: каждая запись
+      // потом сверяется с этим значением и не затирает чужую работу молча.
+      beginSaveSession(project.id, openedAt);
+
       loadDocument(document);
       // Открытие проекта — не действие пользователя. Без явной чистки первый
       // Cmd+Z откатывал бы саму загрузку: доска на секунду становилась пустой.
       clearHistory();
       setState({ name: project.name });
-    });
+    };
+
+    void open();
 
     return () => {
       cancelled = true;
+      endSaveSession();
+      // Документ обязан уйти из стора вместе с экраном. Пока он оставался
+      // висеть, повторный заход на ТОТ ЖЕ проект выглядел для автосохранения
+      // правкой (projectId совпадает с предыдущим), и каждое открытие
+      // переписывало документ и двигало updatedAt.
+      closeDocument();
+      // Object URL'ы картинок живут до явного отзыва — иначе они копятся
+      // за всю сессию по всем открытым доскам.
+      releaseImageCache();
     };
-  }, [projectId, loadDocument]);
+  }, [projectId, loadDocument, closeDocument]);
 
   if (state === null) return <Navigate to="/" replace />;
 

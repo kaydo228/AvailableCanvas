@@ -5,7 +5,9 @@
 
 import { expect, test } from 'vitest';
 
-import { connector, doc, shape } from '@/shared/model/fixtures';
+import { repairDocument } from '@/features/persistence/repair';
+import { doc, shape } from '@/shared/model/fixtures';
+import type { BoardDocument } from '@/shared/types/document';
 import { BadFile, parseBoardFile } from './fileFormat';
 
 const validFile = () => ({
@@ -78,11 +80,24 @@ test('битая модель — сказано, какое поле не то'
   expect(() => parseBoardFile(text(broken2))).toThrow(/ожидалось число, а там строка/);
 });
 
-test('order и nodes разъехались — файл не проходит', () => {
+/*
+ * Раньше здесь стоял отказ: схема сама сверяла order с nodes. Теперь это
+ * забота persistence/repair, и он не отвергает файл, а сводит их обратно
+ * и докладывает об этом. Причина смены — в docs/DECISIONS.md, 2026-08-27:
+ * ровно такой же документ приезжает из IndexedDB, где отказ означал бы
+ * «твоя доска больше не открывается», и разводить два входа нельзя.
+ */
+test('order и nodes разъехались — схема пропускает, чинит repair', () => {
   const broken = validFile();
   const orphan = { ...broken, document: { ...broken.document, order: ['a', 'нет-такого'] } };
 
-  expect(() => parseBoardFile(text(orphan))).toThrow(/нет-такого/);
+  const file = parseBoardFile(text(orphan));
+  expect(file.document.order).toEqual(['a', 'нет-такого']);
+
+  const { document, repairs } = repairDocument(file.document as BoardDocument);
+  expect(document.order).toEqual(['a']);
+  expect(repairs).toHaveLength(1);
+  expect(repairs[0]).toMatchObject({ rule: 1 });
 });
 
 test('картинка узла потерялась — файл не проходит', () => {
@@ -113,34 +128,4 @@ test('картинка узла потерялась — файл не прох�
   };
 
   expect(() => parseBoardFile(text(withImage))).toThrow(/картинки для узла img нет в файле/);
-});
-
-test('дубль в order — файл не проходит', () => {
-  const base = validFile();
-  const twice = { ...base, document: { ...base.document, order: ['a', 'a'] } };
-
-  expect(() => parseBoardFile(text(twice))).toThrow(/узел a в order дважды/);
-});
-
-test('линия с привязанными концами открывается, с пустым концом — нет', () => {
-  const linked = {
-    ...validFile(),
-    document: doc([shape('a'), shape('b'), connector('c', 'a', 'b')]),
-  };
-  expect(parseBoardFile(text(linked)).document.order).toEqual(['a', 'b', 'c']);
-
-  const dangling = structuredClone(linked);
-  // Ни nodeId, ни point: инвариант 3 нарушен, линию нечем нарисовать.
-  dangling.document.nodes.c = {
-    ...connector('c', 'a', 'b'),
-    from: { anchor: 'auto' },
-  } as never;
-  expect(() => parseBoardFile(text(dangling))).toThrow(/document\.nodes\.c/);
-
-  const both = structuredClone(linked);
-  both.document.nodes.c = {
-    ...connector('c', 'a', 'b'),
-    to: { nodeId: 'b', point: { x: 5, y: 5 } },
-  } as never;
-  expect(() => parseBoardFile(text(both))).toThrow(/document\.nodes\.c/);
 });

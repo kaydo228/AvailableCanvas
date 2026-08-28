@@ -190,22 +190,41 @@ test('Cmd+1 и Cmd+0 меняют вид', async ({ page }) => {
   expect(fitted).not.toBe(reset);
 });
 
-test('клавиши поверх заглушек стора не вешаются и не роняют приложение', async ({ page }) => {
+test('клавиши правки: реализованные работают, нереализованные безобидны', async ({ page }) => {
   await openBoard(page);
   await page.evaluate(() => window.__board.getState().select(['s1']));
 
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  // duplicateNodes, group, ungroup и порядок слоёв — заглушки зоны A, они
-  // бросают. Пока их не реализовали, клавиши не привязаны: нажатие обязано
-  // быть безобидным, а не ронять доску.
-  for (const combo of ['ControlOrMeta+d', 'ControlOrMeta+g', ']', '[']) {
-    await page.keyboard.press(combo);
-  }
+  // Cmd+D — рабочее действие с 27 августа (ветка feat/duplicate-nodes).
+  await page.keyboard.press('ControlOrMeta+d');
+  const afterDuplicate = await state(page);
+  expect(afterDuplicate.nodeCount, 'Cmd+D добавляет копию').toBe(3);
+  expect(afterDuplicate.selection, 'выделение переезжает на копию').not.toEqual(['s1']);
+
+  // Порядок слоёв тоже рабочий: копия уходит вниз и возвращается наверх.
+  const copyId = afterDuplicate.selection[0];
+  await page.keyboard.press('ControlOrMeta+[');
+  expect((await state(page)).order[0], 'Cmd+[ отправляет в самый низ').toBe(copyId);
+  await page.keyboard.press(']');
+  expect((await state(page)).order[1], '] поднимает на шаг вперёд').toBe(copyId);
+  await page.keyboard.press('ControlOrMeta+]');
+  const raised = await state(page);
+  expect(raised.order[raised.order.length - 1], 'Cmd+] поднимает в самый верх').toBe(copyId);
+
+  // Cmd+G на одиночном выделении — осознанный no-op: группа из одного узла
+  // не собирается (store.group возвращает null при members < 2).
+  await page.keyboard.press('ControlOrMeta+g');
+  expect((await state(page)).nodeCount, 'группа из одного узла не собирается').toBe(3);
+
+  // Cmd+C и Cmd+V действия в сторе не имеют: в таблице клавиш они есть,
+  // но `run` у них нет. Нажатие обязано быть безобидным, а не ронять доску.
+  await page.keyboard.press('ControlOrMeta+c');
+  await page.keyboard.press('ControlOrMeta+v');
 
   expect(errors, 'нажатия не должны бросать').toEqual([]);
-  expect((await state(page)).nodeCount, 'документ не изменился').toBe(2);
+  expect((await state(page)).nodeCount, 'копирование пока ничего не делает').toBe(3);
 });
 
 test('Cmd+Z отменяет действие, Shift+Cmd+Z возвращает (FR-10)', async ({ page }) => {

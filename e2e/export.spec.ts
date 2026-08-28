@@ -133,6 +133,10 @@ test('JSON уезжает целиком и открывается обратн�
   await expect(page.getByText('Доска «Документ» открыта')).toBeVisible();
   await expect(page).toHaveURL(/\/p\/[\w-]+$/);
 
+  // Тост и адрес появляются раньше документа: экран холста читает его
+  // из IndexedDB отдельным шагом. Без этого ожидания стор иногда ещё пуст.
+  await page.waitForFunction(() => window.__board.getState().document !== null);
+
   const opened = await page.evaluate(() => {
     const document = window.__board.getState().document;
     return { order: document?.order ?? [], projectId: document?.projectId };

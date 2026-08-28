@@ -58,6 +58,14 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
   const ids = idsOf(nodes);
   const patch = (change: NodePatch) => updateNodes(ids, change);
 
+  /*
+   * Замок выключает геометрию, но не оформление: снять замок должно быть чем,
+   * а «только чтение» — это уже другая функция (docs/DECISIONS.md, 2026-08-27).
+   * Достаточно одного заблокированного узла: применять сдвиг ко всем, кроме
+   * него, значит тихо развалить выделенную группу объектов по разным местам.
+   */
+  const anyLocked = nodes.some((node) => node.locked);
+
   /**
    * Единственное место, где одним патчем не обойтись: у фигуры стиль лежит под
    * ключом `label`, у текста и стикера — под `text`, и новое значение надо
@@ -73,6 +81,9 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
   };
 
   const opacity = sharedValue(nodes, (node) => node.opacity);
+  /** Куда свести разъехавшуюся прозрачность: среднее — наименее произвольное. */
+  const averageOpacity =
+    Math.round((nodes.reduce((sum, node) => sum + node.opacity, 0) / nodes.length) * 100) / 100;
   const style = (read: (value: TextStyle) => string | number) =>
     sharedValue(nodes, (node) => {
       const value = textStyleOf(node);
@@ -88,6 +99,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               value={boxValue(nodes, (n) => n.x)}
               onChange={(x) => patch({ x })}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -98,6 +110,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               value={boxValue(nodes, (n) => n.y)}
               onChange={(y) => patch({ y })}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -109,6 +122,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               onChange={(width) => patch({ width })}
               min={1}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -120,6 +134,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               onChange={(height) => patch({ height })}
               min={1}
               suffix="px"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -130,6 +145,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               value={boxValue(nodes, (n) => n.rotation)}
               onChange={(rotation) => patch({ rotation })}
               suffix="°"
+              disabled={anyLocked}
             />
           </Row>
         );
@@ -144,6 +160,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               max={100}
               step={1}
               suffix="%"
+              equalizeTo={Math.round(averageOpacity * 100)}
             />
           </Row>
         );
@@ -163,6 +180,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
             <ColorField
               value={sharedValue(nodes, (node) => ('fill' in node ? node.fill : undefined))}
               onChange={(fill) => patch({ fill })}
+              count={nodes.length}
             />
           </Row>
         );
@@ -172,6 +190,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
             <ColorField
               value={sharedValue(nodes, (node) => ('stroke' in node ? node.stroke : undefined))}
               onChange={(stroke) => patch({ stroke })}
+              count={nodes.length}
             />
           </Row>
         );
@@ -204,6 +223,7 @@ export const MultiSection = ({ nodes }: { nodes: Node[] }) => {
               <ColorField
                 value={style((value) => value.color) as string | undefined}
                 onChange={(color) => patchTextStyle({ color })}
+                count={nodes.length}
               />
             </Row>
             <Row label="Выравнивание">

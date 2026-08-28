@@ -1,5 +1,6 @@
 export {
   ALLOWED_IMAGE_TYPES,
+  collectOrphanBlobs,
   deleteBlob,
   getBlob,
   getBlobUrl,
@@ -9,6 +10,7 @@ export {
   putImage,
   releaseImageCache,
   type StoredImage,
+  sweepBlobs,
 } from './blobStore';
 export {
   createProject,
@@ -17,7 +19,11 @@ export {
   emptyDocument,
   getDocument,
   getProject,
+  isBlankName,
   listProjects,
+  MAX_PROJECT_NAME,
   renameProject,
+  type SaveOutcome,
   saveDocument,
 } from './projectsRepo';
+export { describeRepairs, type Repair, type RepairResult, repairDocument } from './repair';

@@ -52,9 +52,20 @@ export const downloadUrl = (url: string, filename: string): void => {
   link.click();
 };
 
-/** Имя файла: русские буквы оставляем, ломающие файловую систему — нет. */
+/**
+ * Имя файла: русские буквы оставляем, ломающие файловую систему — нет.
+ *
+ * Отдельно вычищаются форматирующие символы (`\p{Cf}`): среди них метка
+ * смены направления письма, которая переворачивает показ имени в загрузках,
+ * и «файл<U+202E>gnp.txt» выглядит как «файлtxt.png». Ведущие точки
+ * схлопываются: имя «...» давало файл «....prostor.json».
+ */
 export const safeFilename = (name: string): string =>
-  name.replace(/[\\/:*?"<>|]/g, '-').trim() || 'Доска';
+  name
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\p{Cf}/gu, '')
+    .replace(/^\.+/, '')
+    .trim() || 'Доска';
 
 export interface PngOptions {
   scope: PngScope;
@@ -133,6 +144,9 @@ export const renderPng = async ({ scope, scale }: Omit<PngOptions, 'name'>): Pro
     canvas = stage.toCanvas(region);
   } finally {
     grid?.show();
+    // Выделение возвращается здесь, а не после отрисовки: падение toCanvas
+    // или отказ getContext оставляли доску без выделения молча.
+    if (selection.length > 0) useBoardStore.getState().select(selection);
   }
 
   // Фон доски подкладываем сами: Konva отдаёт прозрачный PNG, а доска
@@ -146,8 +160,6 @@ export const renderPng = async ({ scope, scale }: Omit<PngOptions, 'name'>): Pro
   context.fillStyle = document.background.color;
   context.fillRect(0, 0, output.width, output.height);
   context.drawImage(canvas, 0, 0);
-
-  if (selection.length > 0) useBoardStore.getState().select(selection);
 
   return { dataUrl: output.toDataURL('image/png'), width: output.width, height: output.height };
 };

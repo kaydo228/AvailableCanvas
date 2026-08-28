@@ -12,8 +12,36 @@
 import { nanoid } from 'nanoid';
 
 import type { BoardDocument, Id, Project } from '@/shared/types/document';
-import { deleteBlob } from './blobStore';
+import { sweepBlobs } from './blobStore';
 import { getDB as db } from './db';
+import { publish } from './sync';
+
+/**
+ * Предел длины имени проекта.
+ *
+ * Поле в диалоге ограничено им же, но одного поля мало: `duplicateProject`
+ * дописывает « — копия» мимо всякого поля, и шесть дублирований подряд давали
+ * имя на 163 символа без всякого предела.
+ */
+export const MAX_PROJECT_NAME = 120;
+
+/** Обрезает имя по пределу, не оставляя висящего пробела на срезе. */
+const capName = (name: string): string =>
+  name.length <= MAX_PROJECT_NAME ? name : name.slice(0, MAX_PROJECT_NAME).trimEnd();
+
+/**
+ * Есть ли в имени хоть один видимый символ.
+ *
+ * `trim()` мало: он не трогает ни форматирующие символы (`\p{Cf}` — сюда
+ * попадают zero-width space и метки направления письма), ни экзотические
+ * пробелы. Имя из них проходило проверку и давало карточку без подписи,
+ * которую в списке не отличить от соседних.
+ */
+const INVISIBLE = /[\p{Cf}\p{Zs}\s]/gu;
+export const isBlankName = (name: string): boolean => name.replace(INVISIBLE, '') === '';
+
+/** Имя для записи: пустое по существу — значит пустое. */
+const cleanName = (name: string): string => (isBlankName(name) ? '' : capName(name.trim()));
 
 /** Пустой документ новой доски. Вид в начале координат, зум 1:1. */
 export const emptyDocument = (projectId: Id): BoardDocument => ({
@@ -42,7 +70,7 @@ export const createProject = async (name: string): Promise<Project> => {
   const now = Date.now();
   const project: Project = {
     id: nanoid(),
-    name: name.trim() || 'Новый проект',
+    name: cleanName(name) || 'Новый проект',
     createdAt: now,
     updatedAt: now,
   };
@@ -53,18 +81,26 @@ export const createProject = async (name: string): Promise<Project> => {
     tx.objectStore('documents').put(emptyDocument(project.id)),
     tx.done,
   ]);
+  publish({ kind: 'projects-changed' });
   return project;
 };
 
-export const renameProject = async (id: Id, name: string): Promise<void> => {
+/**
+ * Возвращает `false`, если проекта уже нет. Раньше функция молча выходила,
+ * диалог закрывался, и человек оставался уверен, что переименовал доску —
+ * а её удалили в соседней вкладке.
+ */
+export const renameProject = async (id: Id, name: string): Promise<boolean> => {
   const database = await db();
   const project = await database.get('projects', id);
-  if (!project) return;
+  if (!project) return false;
   await database.put('projects', {
     ...project,
-    name: name.trim() || project.name,
+    name: cleanName(name) || project.name,
     updatedAt: Date.now(),
   });
+  publish({ kind: 'projects-changed' });
+  return true;
 };
 
 /** Копия проекта вместе с содержимым доски. Возвращает новый проект. */
@@ -78,7 +114,7 @@ export const duplicateProject = async (id: Id): Promise<Project | undefined> => 
   const copy: Project = {
     ...source,
     id: nanoid(),
-    name: `${source.name} — копия`,
+    name: capName(`${source.name} — копия`),
     createdAt: now,
     updatedAt: now,
   };
@@ -89,61 +125,75 @@ export const duplicateProject = async (id: Id): Promise<Project | undefined> => 
     tx.objectStore('documents').put({ ...structuredClone(document), projectId: copy.id }),
     tx.done,
   ]);
+  publish({ kind: 'projects-changed' });
   return copy;
-};
-
-const imageBlobIds = (document: BoardDocument): Id[] =>
-  Object.values(document.nodes).flatMap((node) => (node.type === 'image' ? [node.blobId] : []));
-
-/**
- * Картинки удалённого документа, на которые больше никто не ссылается.
- *
- * Просто снести все блобы документа нельзя: `duplicateProject` копирует узлы
- * как есть, и копия держится за те же `blobId`. Поэтому список сверяется
- * с оставшимися документами — их к этому моменту в базе уже без удалённого.
- *
- * ponytail: линейный проход по всем документам. Досок здесь десятки, а не
- * миллионы; понадобится быстрее — заводить счётчик ссылок на блоб.
- */
-const dropOrphanBlobs = async (deleted: BoardDocument): Promise<void> => {
-  const orphans = new Set(imageBlobIds(deleted));
-  if (orphans.size === 0) return;
-
-  for (const document of await (await db()).getAll('documents')) {
-    for (const blobId of imageBlobIds(document)) orphans.delete(blobId);
-  }
-
-  await Promise.all([...orphans].map(deleteBlob));
 };
 
 /**
  * Необратимо. Документ удаляется вместе с проектом, иначе он останется сиротой
- * навсегда, — и картинки следом за ним: блоб на 10 МБ, до которого из интерфейса
- * уже не дотянуться, всё равно занимает квоту браузера.
+ * навсегда, а следом — картинки доски: на них уже некому ссылаться.
+ *
+ * Картинки сносятся ПОСЛЕ транзакции и по всей базе разом, а не по списку из
+ * удаляемого документа: одна и та же картинка могла попасть в две доски
+ * дублированием проекта, и удалять её по факту «была в этом документе» значит
+ * пробить дыру в копии.
  */
 export const deleteProject = async (id: Id): Promise<void> => {
-  const database = await db();
-  const document = await database.get('documents', id);
-
-  const tx = database.transaction(['projects', 'documents'], 'readwrite');
+  const tx = (await db()).transaction(['projects', 'documents'], 'readwrite');
   await Promise.all([
     tx.objectStore('projects').delete(id),
     tx.objectStore('documents').delete(id),
     tx.done,
   ]);
-
-  if (document) await dropOrphanBlobs(document);
+  await sweepBlobs();
+  publish({ kind: 'deleted', projectId: id });
 };
 
-/** Сохраняет документ и двигает updatedAt проекта — от него зависит порядок в списке. */
-export const saveDocument = async (document: BoardDocument): Promise<void> => {
-  const database = await db();
-  const project = await database.get('projects', document.projectId);
+export type SaveOutcome =
+  | { ok: true; updatedAt: number }
+  /** Проект удалён — писать документ некуда, он остался бы сиротой. */
+  | { ok: false; reason: 'deleted' }
+  /** Документ переписан другой вкладкой: наша запись затёрла бы чужую работу. */
+  | { ok: false; reason: 'conflict'; updatedAt: number };
 
+/**
+ * Сохраняет документ и двигает updatedAt проекта — от него зависит порядок
+ * в списке.
+ *
+ * `expectedUpdatedAt` — то значение, которое вкладка видела, когда открывала
+ * проект. Разошлось с базой — документ переписала другая вкладка, и слепая
+ * запись поверх стёрла бы её работу молча. Без этого аргумента проверки нет:
+ * импорт и починка пишут в проект, который только что создали сами.
+ *
+ * Проект исчез — документ не пишем вовсе. Раньше запись всё равно проходила,
+ * и в базе оставался документ, на который не ссылается ни один проект.
+ * Чтение и запись в одной транзакции: между ними не должна влезть чужая.
+ */
+export const saveDocument = async (
+  document: BoardDocument,
+  expectedUpdatedAt?: number,
+): Promise<SaveOutcome> => {
+  const database = await db();
   const tx = database.transaction(['projects', 'documents'], 'readwrite');
+  const projects = tx.objectStore('projects');
+  const project = await projects.get(document.projectId);
+
+  if (!project) {
+    await tx.done;
+    return { ok: false, reason: 'deleted' };
+  }
+  if (expectedUpdatedAt !== undefined && project.updatedAt !== expectedUpdatedAt) {
+    await tx.done;
+    return { ok: false, reason: 'conflict', updatedAt: project.updatedAt };
+  }
+
+  const updatedAt = Date.now();
   await Promise.all([
     tx.objectStore('documents').put(document),
-    project ? tx.objectStore('projects').put({ ...project, updatedAt: Date.now() }) : undefined,
+    projects.put({ ...project, updatedAt }),
     tx.done,
   ]);
+
+  publish({ kind: 'saved', projectId: document.projectId, updatedAt });
+  return { ok: true, updatedAt };
 };

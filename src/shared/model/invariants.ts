@@ -1,11 +1,21 @@
 /**
  * Инварианты модели из раздела 5 docs/SPEC.md.
  *
- * Пока заглушки — тесты на них падают, и это ожидаемо.
- * Реализуются в зоне A вместе с движком холста.
+ * Это проверка, а не починка: функции только находят нарушения и называют их.
+ * Что делать с найденным, решает вызывающий — оболочка чинит документ на входе
+ * (`features/persistence/repair.ts`), тесты просто падают.
+ *
+ * Четыре из пяти инвариантов держатся конструкцией кода, а не проверками:
+ * инвариант 1 — `addNode` пишет и в `nodes`, и в `order`; инвариант 3 —
+ * конструкторы `pointEndpoint`/`nodeEndpoint`, собрать неправильный конец
+ * через них нельзя; инвариант 4 — `operations.removeNode`; инвариант 5 —
+ * `clampZoom` в движке. Здесь они проверяются для случая, когда документ
+ * пришёл извне и мимо всей этой конструкции: из файла, из IndexedDB,
+ * из чужой версии приложения.
  */
 
-import type { BoardDocument, Endpoint } from '@/shared/types/document';
+import type { BoardDocument, Endpoint, Id } from '@/shared/types/document';
+import { ZOOM_MAX, ZOOM_MIN } from '@/shared/types/document';
 
 export interface Violation {
   /** Номер инварианта из раздела 5 ТЗ. */
@@ -13,36 +23,123 @@ export interface Violation {
   message: string;
 }
 
-const notImplemented = (what: string): never => {
-  throw new Error(`не реализовано: ${what}`);
-};
+/**
+ * Инвариант 1: order и nodes соответствуют друг другу взаимно однозначно.
+ *
+ * «Взаимно однозначно» значит три вещи, и каждая ломается по-своему: id
+ * в `order` без узла рисует пустоту, узел без записи в `order` сохраняется
+ * и не отрисовывается, дубль в `order` рисует узел дважды и даёт React
+ * два одинаковых ключа.
+ */
+export function checkOrderMatchesNodes(doc: BoardDocument): Violation[] {
+  const violations: Violation[] = [];
+  const seen = new Set<Id>();
 
-/** Инвариант 1: order и nodes соответствуют друг другу взаимно однозначно. */
-export function checkOrderMatchesNodes(_doc: BoardDocument): Violation[] {
-  return notImplemented('checkOrderMatchesNodes');
+  for (const id of doc.order) {
+    if (seen.has(id)) {
+      violations.push({ rule: 1, message: `узел ${id} стоит в order дважды` });
+      continue;
+    }
+    seen.add(id);
+    if (!doc.nodes[id]) {
+      violations.push({ rule: 1, message: `в order есть ${id}, которого нет в nodes` });
+    }
+  }
+
+  for (const id of Object.keys(doc.nodes)) {
+    if (!seen.has(id)) {
+      violations.push({ rule: 1, message: `узел ${id} есть в nodes, но не в order` });
+    }
+  }
+
+  return violations;
 }
 
-/** Инвариант 2: ConnectorNode не участвует в groupId. */
-export function checkConnectorsNotGrouped(_doc: BoardDocument): Violation[] {
-  return notImplemented('checkConnectorsNotGrouped');
+/**
+ * Инвариант 2: ConnectorNode не участвует в groupId.
+ *
+ * По типам `groupId` у коннектора нет вовсе — но документ приходит извне,
+ * и там он может оказаться. Группа двигает своих детей, а у линии нет
+ * рамки, двигать нечего: она поехала бы за группой концами, отвязавшись
+ * от фигур, к которым привязана.
+ */
+export function checkConnectorsNotGrouped(doc: BoardDocument): Violation[] {
+  const violations: Violation[] = [];
+
+  for (const [id, node] of Object.entries(doc.nodes)) {
+    if (node.type !== 'connector') continue;
+    if ('groupId' in node && (node as { groupId?: Id }).groupId !== undefined) {
+      violations.push({
+        rule: 2,
+        message: `линии ${id} приписан groupId — у коннектора его не бывает`,
+      });
+    }
+  }
+
+  return violations;
 }
 
-/** Инвариант 3: у Endpoint задан ровно один из nodeId или point. */
-export function checkEndpointExclusive(_endpoint: Endpoint): boolean {
-  return notImplemented('checkEndpointExclusive');
+/**
+ * Инвариант 3: у Endpoint задан ровно один из nodeId или point.
+ *
+ * Оба разом — неизвестно, за чем следовать: за фигурой или за координатой.
+ * Ни одного — рисовать линию не от чего.
+ */
+export function checkEndpointExclusive(endpoint: Endpoint): boolean {
+  return (endpoint.nodeId !== undefined) !== (endpoint.point !== undefined);
 }
 
 /** Инвариант 3, по всему документу. */
-export function checkEndpointsExclusive(_doc: BoardDocument): Violation[] {
-  return notImplemented('checkEndpointsExclusive');
+export function checkEndpointsExclusive(doc: BoardDocument): Violation[] {
+  const violations: Violation[] = [];
+
+  for (const [id, node] of Object.entries(doc.nodes)) {
+    if (node.type !== 'connector') continue;
+    for (const which of ['from', 'to'] as const) {
+      if (!checkEndpointExclusive(node[which])) {
+        violations.push({
+          rule: 3,
+          message: `у линии ${id} конец «${which}» задан не ровно одним способом`,
+        });
+      }
+    }
+  }
+
+  return violations;
 }
 
-/** Инвариант 5: zoom в диапазоне [0.1, 4]. */
-export function checkZoomInRange(_doc: BoardDocument): Violation[] {
-  return notImplemented('checkZoomInRange');
+/**
+ * Инвариант 5: zoom в диапазоне [ZOOM_MIN, ZOOM_MAX].
+ *
+ * Границы берутся из модели, а не повторяются числами: их же использует
+ * `clampZoom` в движке, и разъехавшись, они дали бы документ, который
+ * проверка считает валидным, а движок тут же зажимает.
+ *
+ * NaN ловится отдельно: он не больше и не меньше ничего, и обычное сравнение
+ * с границами пропустило бы его молча.
+ */
+export function checkZoomInRange(doc: BoardDocument): Violation[] {
+  const { zoom } = doc.viewport;
+
+  if (!Number.isFinite(zoom)) {
+    return [{ rule: 5, message: `зум не число: ${zoom}` }];
+  }
+  if (zoom < ZOOM_MIN || zoom > ZOOM_MAX) {
+    return [{ rule: 5, message: `зум ${zoom} вне диапазона [${ZOOM_MIN}, ${ZOOM_MAX}]` }];
+  }
+  return [];
 }
 
-/** Все инварианты разом. Инвариант 4 проверяется через operations.removeNode. */
-export function validateDocument(_doc: BoardDocument): Violation[] {
-  return notImplemented('validateDocument');
+/**
+ * Все инварианты разом. Инвариант 4 проверяется через operations.removeNode:
+ * он про переход между состояниями, а не про состояние, и по одному
+ * документу его не увидеть.
+ */
+export function validateDocument(doc: BoardDocument): Violation[] {
+  return [
+    ...checkOrderMatchesNodes(doc),
+    ...checkConnectorsNotGrouped(doc),
+    ...checkEndpointsExclusive(doc),
+    ...checkZoomInRange(doc),
+  ];
 }

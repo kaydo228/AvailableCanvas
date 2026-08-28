@@ -1,6 +1,6 @@
 /** Индикатор состояния сохранения в шапке холста (FR-11, 6.1). */
 
-import { Check, CloudOff, Loader2 } from 'lucide-react';
+import { Check, CloudOff, Loader2, TriangleAlert } from 'lucide-react';
 
 import { useSaveStatus } from './autosave';
 
@@ -8,7 +8,12 @@ const TEXT = {
   saving: 'Сохранение…',
   saved: 'Все изменения сохранены',
   error: 'Не удалось сохранить',
+  conflict: 'Изменена в другой вкладке',
+  deleted: 'Проект удалён',
 } as const;
+
+/** Состояния, в которых индикатор говорит о потере данных, а не о ходе работы. */
+const ALARMING = new Set<string>(['error', 'conflict', 'deleted']);
 
 export const SaveIndicator = () => {
   const status = useSaveStatus((s) => s.status);
@@ -20,7 +25,7 @@ export const SaveIndicator = () => {
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 font-mono text-micro ${
-        status === 'error' ? 'text-signal' : 'text-faint'
+        ALARMING.has(status) ? 'text-signal' : 'text-faint'
       }`}
       // Спокойное объявление: индикатор меняется часто, assertive заспамил бы скринридер.
       aria-live="polite"
@@ -28,6 +33,9 @@ export const SaveIndicator = () => {
       {status === 'saving' && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
       {status === 'saved' && <Check className="size-3.5" aria-hidden="true" />}
       {status === 'error' && <CloudOff className="size-3.5" aria-hidden="true" />}
+      {(status === 'conflict' || status === 'deleted') && (
+        <TriangleAlert className="size-3.5" aria-hidden="true" />
+      )}
       {TEXT[status]}
     </span>
   );
