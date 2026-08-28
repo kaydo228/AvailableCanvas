@@ -120,6 +120,45 @@ describe('resizeNode на группе', () => {
     expect(a.width).toBeGreaterThanOrEqual(MIN_NODE_SIDE);
     expect(a.height).toBeGreaterThanOrEqual(MIN_NODE_SIDE);
   });
+
+  it('сжатие до минимума и возврат сохраняют исходные пропорции', () => {
+    const groupId = board().group(['a', 'b']) as Id;
+    board().resizeNode(groupId, { x: 0, y: 0, width: 3, height: 3 });
+    board().resizeNode(groupId, { x: 0, y: 0, width: 300, height: 60 });
+    expect(nodeAt('a')).toMatchObject({ x: 0, y: 0, width: 100, height: 60 });
+    expect(nodeAt('b')).toMatchObject({ x: 200, y: 0, width: 100, height: 60 });
+  });
+
+  it('повёрнутое содержимое масштабируется только пропорционально', () => {
+    const groupId = board().group(['a', 'b']) as Id;
+    board().rotateNode('a', 45);
+    const before = nodeAt(groupId) as GroupNode;
+    board().resizeNode(groupId, { x: before.x, y: before.y, width: 600, height: 60 });
+    const after = nodeAt(groupId) as GroupNode;
+    expect(after.width / after.height).toBeCloseTo(before.width / before.height);
+  });
+});
+
+describe('публичные мутации', () => {
+  it('updateNode не пропускает нечисловую и отрицательную геометрию', () => {
+    board().updateNode('a', { x: Number.NaN, width: -1, height: Number.POSITIVE_INFINITY });
+    expect(nodeAt('a')).toMatchObject({ x: 0, width: MIN_NODE_SIDE, height: 60 });
+  });
+
+  it('setViewport и panBy не пропускают нечисловые координаты и зум вне границ', () => {
+    board().setViewport({ x: Number.NaN, y: Number.POSITIVE_INFINITY, zoom: 99 });
+    board().panBy(Number.NaN, Number.NaN);
+    expect(document().viewport).toEqual({ x: 0, y: 0, zoom: 4 });
+  });
+
+  it('удаление исходного узла убирает невидимый нулевой соединитель', () => {
+    useBoardStore.setState({
+      document: doc([shape('a', 0, 0), connector('loop', 'a', 'a')]),
+      selection: [],
+    });
+    board().removeNodes(['a']);
+    expect(nodeAt('loop')).toBeUndefined();
+  });
 });
 
 describe('resizeNode и коннектор', () => {

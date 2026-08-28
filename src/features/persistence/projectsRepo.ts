@@ -65,6 +65,15 @@ export const getProject = async (id: Id): Promise<Project | undefined> =>
 export const getDocument = async (projectId: Id): Promise<BoardDocument | undefined> =>
   (await db()).get('documents', projectId);
 
+/** Превью не меняет updatedAt: это снимок уже сохранённой доски, а не правка. */
+export const saveProjectThumbnail = async (id: Id, thumbnail: string): Promise<void> => {
+  const database = await db();
+  const project = await database.get('projects', id);
+  if (!project) return;
+  await database.put('projects', { ...project, thumbnail });
+  publish({ kind: 'projects-changed' });
+};
+
 /** Создаёт проект вместе с пустым документом. Возвращает проект — id нужен для перехода на холст. */
 export const createProject = async (name: string): Promise<Project> => {
   const now = Date.now();

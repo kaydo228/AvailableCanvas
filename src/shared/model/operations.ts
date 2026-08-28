@@ -9,8 +9,9 @@ import {
   referencePoint,
   resolveEndpoint,
 } from '@/features/canvas/connectors/geometry';
+import { connectorPoints, isBezier } from '@/features/canvas/connectors/routing';
 import { rotatePoint } from '@/features/canvas/selection/rotate';
-import type { BoardDocument, BoxNode, Id, Node } from '@/shared/types/document';
+import type { BoardDocument, BoxNode, ConnectorNode, Id, Node } from '@/shared/types/document';
 
 /**
  * Прозрачность в модели — 0..1 (см. `BaseNode`). Выход за диапазон роняет
@@ -175,6 +176,22 @@ export function withGroupDescendants(document: BoardDocument, ids: Iterable<Id>)
   return result;
 }
 
+/** Есть ли среди реального содержимого группы повёрнутый узел. */
+export function groupHasRotatedDescendant(document: BoardDocument, groupId: Id): boolean {
+  const group = document.nodes[groupId];
+  if (group?.type !== 'group') return false;
+
+  return withGroupDescendants(document, group.children).some((id) => {
+    const node = document.nodes[id];
+    return (
+      node !== undefined &&
+      node.type !== 'connector' &&
+      node.type !== 'group' &&
+      node.rotation !== 0
+    );
+  });
+}
+
 /**
  * Углы узла с учётом поворота. Konva вращает узел вокруг его `x, y`, то есть
  * вокруг левого верхнего угла, — здесь та же математика.
@@ -227,4 +244,46 @@ export function groupBounds(
 
   if (!Number.isFinite(minX)) return null;
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+type Point = { x: number; y: number };
+
+const cubicPoint = ([p0, p1, p2, p3]: [Point, Point, Point, Point], t: number): Point => {
+  const mt = 1 - t;
+  return {
+    x: mt ** 3 * p0.x + 3 * mt ** 2 * t * p1.x + 3 * mt * t ** 2 * p2.x + t ** 3 * p3.x,
+    y: mt ** 3 * p0.y + 3 * mt ** 2 * t * p1.y + 3 * mt * t ** 2 * p2.y + t ** 3 * p3.y,
+  };
+};
+
+const cubicExtrema = (p0: number, p1: number, p2: number, p3: number): number[] => {
+  const a = -p0 + 3 * p1 - 3 * p2 + p3;
+  const b = 3 * p0 - 6 * p1 + 3 * p2;
+  const c = -3 * p0 + 3 * p1;
+  const discriminant = 4 * b * b - 12 * a * c;
+  if (Math.abs(a) < 1e-9) return Math.abs(b) < 1e-9 ? [] : [-c / (2 * b)];
+  if (discriminant < 0) return [];
+  const root = Math.sqrt(discriminant);
+  return [(-2 * b + root) / (6 * a), (-2 * b - root) / (6 * a)];
+};
+
+/** Точки, которые гарантированно охватывают видимый маршрут соединителя. */
+export function connectorBoundsPoints(document: BoardDocument, connector: ConnectorNode): Point[] {
+  const route = connectorPoints(connector, document);
+  if (!route)
+    return [connector.from.point, connector.to.point].filter(
+      (point): point is Point => point !== undefined,
+    );
+
+  const points = Array.from({ length: route.length / 2 }, (_, index) => ({
+    x: route[index * 2] as number,
+    y: route[index * 2 + 1] as number,
+  }));
+  if (!isBezier(connector, route) || points.length !== 4) return points;
+
+  const cubic = points as [Point, Point, Point, Point];
+  const [p0, p1, p2, p3] = cubic;
+  return [0, 1, ...cubicExtrema(p0.x, p1.x, p2.x, p3.x), ...cubicExtrema(p0.y, p1.y, p2.y, p3.y)]
+    .filter((t, index, all) => t >= 0 && t <= 1 && all.indexOf(t) === index)
+    .map((t) => cubicPoint(cubic, t));
 }

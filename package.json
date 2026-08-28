@@ -11,6 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "e2e": "playwright test --project=e2e",
+    "check": "npm run typecheck && npm run lint && npm test && npm run e2e",
     "lint": "biome check .",
     "docs:pdf": "node scripts/build-pdf.mjs REPORT.md docs/REPORT.pdf \"Отчёт по домашнему заданию №2\" \"Агенты, workflow, изоляция, worktrees — что сделали, что не получилось и чего это стоило\"",
     "prepare": "lefthook install || exit 0",

@@ -22,7 +22,16 @@
  * (docs/CONTRACT-REQUESTS.md, 2026-08-27 A → B).
  */
 
-import type { BoardDocument, BoxNode, Endpoint, Id, Node } from '@/shared/types/document';
+import { groupBounds } from '@/shared/model/operations';
+import type {
+  BoardDocument,
+  BoxNode,
+  Endpoint,
+  GroupNode,
+  Id,
+  Node,
+} from '@/shared/types/document';
+import { limitText, MAX_TEXT_LENGTH, MIN_NODE_SIDE } from '@/shared/types/document';
 
 /** Нарушение, которое пришлось исправить. `rule` — номер инварианта из ТЗ, раздел 5. */
 export interface Repair {
@@ -38,9 +47,6 @@ export interface RepairResult {
 /** Инвариант 5. Держится `clampZoom` в движке, но импорт мимо движка. */
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
-
-/** Размер меньше единицы Konva рисует нулевым холстом и роняет отрисовку. */
-const MIN_SIDE = 1;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -77,8 +83,8 @@ function repairNumbers(node: Node, repairs: Repair[]): Node {
   const x = finite(node.x, 0);
   const y = finite(node.y, 0);
   const rotation = finite(node.rotation, 0);
-  const width = Math.max(MIN_SIDE, finite(node.width, MIN_SIDE));
-  const height = Math.max(MIN_SIDE, finite(node.height, MIN_SIDE));
+  const width = Math.max(MIN_NODE_SIDE, finite(node.width, MIN_NODE_SIDE));
+  const height = Math.max(MIN_NODE_SIDE, finite(node.height, MIN_NODE_SIDE));
 
   if (x !== node.x || y !== node.y || rotation !== node.rotation) {
     repairs.push({ rule: 5, what: `узел ${node.id}: нечисловые координаты обнулены` });
@@ -91,6 +97,32 @@ function repairNumbers(node: Node, repairs: Repair[]): Node {
   }
 
   return { ...node, x, y, rotation, width, height, opacity };
+}
+
+function repairTextFields(node: Node, repairs: Repair[]): Node {
+  const text = (value: string, field: string): string => {
+    const limited = limitText(value);
+    if (limited !== value) {
+      repairs.push({
+        rule: 5,
+        what: `${field} ${node.id}: текст сокращён до ${MAX_TEXT_LENGTH} символов`,
+      });
+    }
+    return limited;
+  };
+
+  switch (node.type) {
+    case 'text':
+    case 'sticky':
+      return { ...node, text: { ...node.text, value: text(node.text.value, 'узел') } };
+    case 'shape':
+    case 'connector':
+      return node.label
+        ? { ...node, label: { ...node.label, value: text(node.label.value, 'подпись') } }
+        : node;
+    default:
+      return node;
+  }
 }
 
 /**
@@ -199,6 +231,107 @@ function repairOrder(nodes: Record<Id, Node>, order: Id[], repairs: Repair[]): I
   return result;
 }
 
+const groupsOf = (nodes: Record<Id, Node>): GroupNode[] =>
+  Object.values(nodes).filter((node): node is GroupNode => node.type === 'group');
+
+/** Восстанавливает двустороннюю связь групп; явный groupId важнее children. */
+function repairGroups(nodes: Record<Id, Node>, repairs: Repair[]): void {
+  const clearParent = (id: Id, message: string) => {
+    const node = nodes[id];
+    if (!node || node.type === 'connector' || node.groupId === undefined) return;
+    const { groupId: _groupId, ...rest } = node;
+    nodes[id] = rest as Node;
+    repairs.push({ rule: 2, what: message });
+  };
+
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.type === 'connector' || node.groupId === undefined) continue;
+    const parent = nodes[node.groupId];
+    if (parent?.type !== 'group' || parent.id === id) {
+      clearParent(id, `узел ${id}: несуществующая или собственная группа убрана`);
+    }
+  }
+
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.type === 'connector' || node.groupId === undefined) continue;
+    const seen = new Set<Id>([id]);
+    let parentId: Id | undefined = node.groupId;
+    while (parentId !== undefined) {
+      if (seen.has(parentId)) {
+        clearParent(id, `узел ${id}: цикл групп разорван`);
+        break;
+      }
+      seen.add(parentId);
+      const parent: Node | undefined = nodes[parentId];
+      parentId = parent?.type === 'connector' ? undefined : parent?.groupId;
+    }
+  }
+
+  const rebuildChildren = () => {
+    const ids = Object.keys(nodes);
+    for (const group of groupsOf(nodes)) {
+      const children: Id[] = [];
+      const append = (id: Id) => {
+        const child = nodes[id];
+        if (
+          !child ||
+          child.type === 'connector' ||
+          child.groupId !== group.id ||
+          children.includes(id)
+        )
+          return;
+        children.push(id);
+      };
+      for (const id of group.children) append(id);
+      for (const id of ids) append(id);
+      if (
+        children.length !== group.children.length ||
+        children.some((id, index) => id !== group.children[index])
+      ) {
+        nodes[group.id] = { ...group, children };
+        repairs.push({ rule: 2, what: `группа ${group.id}: состав синхронизирован с groupId` });
+      }
+    }
+  };
+
+  rebuildChildren();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const group of groupsOf(nodes)) {
+      if (group.children.length > 1) continue;
+      const [childId] = group.children;
+      const child = childId === undefined ? undefined : nodes[childId];
+      if (child && child.type !== 'connector') {
+        if (group.groupId === undefined) {
+          const { groupId: _groupId, ...rest } = child;
+          nodes[child.id] = rest as Node;
+        } else {
+          nodes[child.id] = { ...child, groupId: group.groupId };
+        }
+      }
+      delete nodes[group.id];
+      repairs.push({ rule: 2, what: `группа ${group.id}: меньше двух участников — распущена` });
+      changed = true;
+      break;
+    }
+    if (changed) rebuildChildren();
+  }
+
+  const document: BoardDocument = {
+    projectId: '',
+    schemaVersion: 1,
+    nodes,
+    order: Object.keys(nodes),
+    viewport: { x: 0, y: 0, zoom: 1 },
+    background: { color: '', grid: 'none' },
+  };
+  for (const group of groupsOf(nodes)) {
+    const box = groupBounds(document, group.id);
+    if (box) nodes[group.id] = { ...group, ...box };
+  }
+}
+
 /**
  * Чинит документ. Возвращает исправленную копию и список того, что пришлось
  * поправить: пустой список означает, что документ был в порядке.
@@ -226,6 +359,7 @@ export function repairDocument(document: BoardDocument): RepairResult {
     }
 
     fixed = repairNumbers(fixed, repairs);
+    fixed = repairTextFields(fixed, repairs);
 
     // Инвариант 2: коннектор не участвует в группе.
     if (fixed.type === 'connector' && 'groupId' in fixed) {
@@ -264,6 +398,21 @@ export function repairDocument(document: BoardDocument): RepairResult {
       }
     }
   }
+
+  for (const [id, node] of Object.entries(nodes)) {
+    if (
+      node.type === 'connector' &&
+      node.from.point !== undefined &&
+      node.to.point !== undefined &&
+      node.from.point.x === node.to.point.x &&
+      node.from.point.y === node.to.point.y
+    ) {
+      delete nodes[id];
+      repairs.push({ rule: 3, what: `линия ${id}: нулевая длина — удалена` });
+    }
+  }
+
+  repairGroups(nodes, repairs);
 
   const order = repairOrder(nodes, document.order, repairs);
 

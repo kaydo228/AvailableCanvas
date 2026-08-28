@@ -8,6 +8,14 @@
 
 export type Id = string;
 
+/** Меньше этого узел невозможно стабильно поймать мышью. */
+export const MIN_NODE_SIDE = 8;
+
+/** Защита холста от вставки неограниченного текста в один узел. */
+export const MAX_TEXT_LENGTH = 10_000;
+
+export const limitText = (value: string): string => value.slice(0, MAX_TEXT_LENGTH);
+
 export interface Project {
   id: Id;
   name: string;

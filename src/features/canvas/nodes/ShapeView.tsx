@@ -193,7 +193,7 @@ function ShapeViewInner({
           height={Math.max(0, height - LABEL_PADDING * 2)}
           text={label.value}
           fontSize={label.fontSize}
-          fontFamily="Inter, system-ui, sans-serif"
+          fontFamily="Golos Text, system-ui, sans-serif"
           fontStyle={fontStyleOf(label)}
           lineHeight={label.lineHeight ?? 1.3}
           fill={label.color}

@@ -6,6 +6,7 @@
  * отношения не имеет — по ней обрезалось бы всё, что не влезло в экран.
  */
 
+import { connectorBoundsPoints } from '@/shared/model/operations';
 import type { BoardDocument, BoxNode, Id } from '@/shared/types/document';
 
 export interface Box {
@@ -60,9 +61,7 @@ export const boundsOf = (
     if (!node) continue;
 
     if (node.type === 'connector') {
-      for (const endpoint of [node.from, node.to]) {
-        if (endpoint.point) points.push(endpoint.point);
-      }
+      points.push(...connectorBoundsPoints(document, node));
       continue;
     }
 

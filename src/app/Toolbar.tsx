@@ -6,6 +6,7 @@
  * а не подписи. Сам холст об этой панели ничего не знает.
  */
 
+import { Popover } from 'radix-ui';
 import { useImageInsert } from '@/features/canvas/tools/useImageInsert';
 import type { Tool } from '@/shared/store/board';
 import { useBoardStore } from '@/shared/store/board';
@@ -35,7 +36,14 @@ export function Toolbar() {
   const setTool = useBoardStore((s) => s.setTool);
   const zoom = useBoardStore((s) => s.document?.viewport.zoom ?? 1);
   const zoomToFit = useBoardStore((s) => s.zoomToFit);
+  const zoomToSelection = useBoardStore((s) => s.zoomToSelection);
+  const resetZoom = useBoardStore((s) => s.resetZoom);
+  const zoomAt = useBoardStore((s) => s.zoomAt);
+  const canvasSize = useBoardStore((s) => s.canvasSize);
   const count = useBoardStore((s) => s.document?.order.length ?? 0);
+
+  const setZoom = (next: number) =>
+    zoomAt({ x: canvasSize.width / 2, y: canvasSize.height / 2 }, next / zoom);
 
   return (
     <div className="absolute top-4 left-4 z-10 flex items-center gap-0.5 rounded-lg border border-rule bg-sheet p-1 shadow-pop">
@@ -68,13 +76,42 @@ export function Toolbar() {
 
       <span className="mx-1.5 h-5 w-px bg-rule" aria-hidden="true" />
 
-      <span className="px-1 font-mono text-faint text-micro tabular-nums">
-        {Math.round(zoom * 100)}% · {count}
-      </span>
-
-      <button type="button" onClick={zoomToFit} className={QUIET}>
-        Вписать
-      </button>
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <button type="button" title="Масштаб и вид" className={QUIET}>
+            <span className="font-mono text-faint text-micro tabular-nums">
+              {Math.round(zoom * 100)}% · {count}
+            </span>
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            className="z-20 min-w-52 rounded-md border border-rule bg-sheet p-1 shadow-pop"
+            sideOffset={6}
+          >
+            {[50, 100, 200].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={QUIET}
+                onClick={() => setZoom(value / 100)}
+              >
+                {value} %
+              </button>
+            ))}
+            <div className="my-1 h-px bg-rule" />
+            <button type="button" className={QUIET} onClick={zoomToFit}>
+              Вписать всё
+            </button>
+            <button type="button" className={QUIET} onClick={zoomToSelection}>
+              Вписать выделенное
+            </button>
+            <button type="button" className={QUIET} onClick={resetZoom}>
+              100 %
+            </button>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   );
 }

@@ -10,7 +10,9 @@
  */
 
 import type { Rect } from '@/features/canvas/engine/contract';
-import type { Node } from '@/shared/types/document';
+import { MIN_NODE_SIDE, type Node } from '@/shared/types/document';
+
+export { MIN_NODE_SIDE } from '@/shared/types/document';
 
 export function keepsAspect(node: Node, shiftKey: boolean): boolean {
   // Картинка: пропорции по умолчанию, Shift отпускает.
@@ -35,9 +37,6 @@ export function applyAspect(box: Rect, aspect: number): Rect {
 
   return { x: box.x, y: box.y, width, height };
 }
-
-/** Меньше этого узел невозможно поймать мышью. */
-export const MIN_NODE_SIDE = 8;
 
 export function clampSize(box: Rect): Rect {
   return {

@@ -4,11 +4,14 @@ import {
   checkConnectorsNotGrouped,
   checkEndpointExclusive,
   checkEndpointsExclusive,
+  checkGroupFrames,
+  checkGroupRelations,
   checkOrderMatchesNodes,
   checkZoomInRange,
   validateDocument,
 } from '@/shared/model/invariants';
 import { clampOpacity, removeNode } from '@/shared/model/operations';
+import type { GroupNode } from '@/shared/types/document';
 
 /**
  * Пять инвариантов из раздела 5 docs/SPEC.md.
@@ -52,6 +55,63 @@ describe('инвариант 2 — коннектор не участвует в
     c.groupId = 'g1';
     const d = doc([shape('a'), shape('b'), c as never]);
     expect(checkConnectorsNotGrouped(d)).toHaveLength(1);
+  });
+});
+
+describe('инвариант 2 — связь группы двусторонняя', () => {
+  it('ловит groupId без записи в children', () => {
+    const a = { ...shape('a'), groupId: 'g' };
+    const group: GroupNode = {
+      id: 'g',
+      type: 'group',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 60,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      children: [],
+    };
+    expect(checkGroupRelations(doc([a, group]))).toHaveLength(1);
+  });
+
+  it('ловит цикл между группами', () => {
+    const a: GroupNode = {
+      id: 'a',
+      type: 'group',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 60,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      groupId: 'b',
+      children: ['b', 'x'],
+    };
+    const b: GroupNode = { ...a, id: 'b', groupId: 'a', children: ['a', 'y'] };
+    const x = { ...shape('x'), groupId: 'a' };
+    const y = { ...shape('y'), groupId: 'b' };
+    expect(checkGroupRelations(doc([a, b, x, y]))).toHaveLength(1);
+  });
+
+  it('ловит устаревшую производную рамку', () => {
+    const a = { ...shape('a'), groupId: 'g' };
+    const b = { ...shape('b', 200, 0), groupId: 'g' };
+    const group: GroupNode = {
+      id: 'g',
+      type: 'group',
+      x: 999,
+      y: 999,
+      width: 1,
+      height: 1,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      children: ['a', 'b'],
+    };
+    expect(checkGroupFrames(doc([a, b, group]))).toHaveLength(1);
   });
 });
 

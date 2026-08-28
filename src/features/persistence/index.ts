@@ -25,5 +25,6 @@ export {
   renameProject,
   type SaveOutcome,
   saveDocument,
+  saveProjectThumbnail,
 } from './projectsRepo';
 export { describeRepairs, type Repair, type RepairResult, repairDocument } from './repair';

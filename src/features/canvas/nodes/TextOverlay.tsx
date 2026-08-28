@@ -15,7 +15,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 
 import type { Rect } from '@/features/canvas/engine/contract';
 import { toScreen } from '@/features/canvas/engine/viewport';
-import type { TextStyle, Viewport } from '@/shared/types/document';
+import { MAX_TEXT_LENGTH, type TextStyle, type Viewport } from '@/shared/types/document';
 
 export interface TextOverlayProps {
   /** Мировая рамка редактируемого узла. */
@@ -106,6 +106,7 @@ export function TextOverlay({
     >
       <textarea
         ref={ref}
+        maxLength={MAX_TEXT_LENGTH}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onBlur={() => {
@@ -126,7 +127,7 @@ export function TextOverlay({
           background: 'transparent',
           pointerEvents: 'auto',
           color: style.color,
-          fontFamily: 'Inter, system-ui, sans-serif',
+          fontFamily: 'Golos Text, system-ui, sans-serif',
           fontSize: style.fontSize * viewport.zoom,
           lineHeight: style.lineHeight ?? 1.3,
           fontWeight: style.bold ? 600 : 400,

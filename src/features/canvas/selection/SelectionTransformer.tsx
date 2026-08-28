@@ -14,6 +14,7 @@ import type Konva from 'konva';
 import { useCallback, useEffect, useRef } from 'react';
 import { Transformer } from 'react-konva';
 
+import { groupHasRotatedDescendant } from '@/shared/model/operations';
 import { useBoardStore } from '@/shared/store/board';
 
 import { keepsAspect, MIN_NODE_SIDE } from './resize';
@@ -53,7 +54,12 @@ export function SelectionTransformer() {
     // При смешанном выделении пропорции держим, только если этого требуют
     // все узлы: иначе одно движение ручки испортит картинку в наборе.
     const keep =
-      selected.length > 0 && selected.every((node) => keepsAspect(node, shiftRef.current));
+      selected.length > 0 &&
+      selected.every(
+        (node) =>
+          keepsAspect(node, shiftRef.current) ||
+          (node.type === 'group' && groupHasRotatedDescendant(document, node.id)),
+      );
 
     transformer.keepRatio(keep);
     transformer.enabledAnchors(

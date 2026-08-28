@@ -79,3 +79,27 @@ test('удаление требует подтверждения и убирае
 
   await expect(page.getByText('На удаление')).toHaveCount(0);
 });
+
+test('выход с холста сохраняет миниатюру карточки', async ({ page }) => {
+  await page.getByRole('button', { name: 'Создать проект' }).last().click();
+  await page.getByLabel('Имя проекта').fill('С превью');
+  await page.getByRole('button', { name: 'Создать' }).click();
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await page.getByRole('link', { name: 'Назад к списку' }).click();
+  await expect(page.locator('button.group img')).toBeVisible();
+});
+
+test('несуществующий проект показывает понятное состояние, а не редирект', async ({ page }) => {
+  await page.goto('/p/does-not-exist');
+  await expect(page.getByRole('heading', { name: 'Проект не найден' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'К списку досок' })).toBeVisible();
+});
+
+test('меню масштаба даёт пресеты и действия вида', async ({ page }) => {
+  await page.getByRole('button', { name: 'Создать проект' }).last().click();
+  await page.getByRole('button', { name: 'Создать' }).click();
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await page.getByTitle('Масштаб и вид').click();
+  await page.getByRole('button', { name: '200 %' }).click();
+  expect(await page.evaluate(() => window.__board.getState().document?.viewport.zoom)).toBe(2);
+});

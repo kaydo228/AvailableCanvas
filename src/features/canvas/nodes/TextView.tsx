@@ -29,6 +29,7 @@ import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { Group, Rect, Text } from 'react-konva';
 
 import type { Size } from '@/features/canvas/engine/contract';
+import { useBoardStore } from '@/shared/store/board';
 import type { TextNode } from '@/shared/types/document';
 
 import type { NodeViewProps } from './contract';
@@ -41,7 +42,7 @@ import type { NodeViewProps } from './contract';
 export const TEXT_PADDING = 8;
 
 /** Тот же стек, что и у textarea в TextOverlay: иначе метрики разъедутся. */
-const FONT_FAMILY = 'Inter, system-ui, sans-serif';
+const FONT_FAMILY = 'Golos Text, system-ui, sans-serif';
 
 /** Запасной межстрочный — как в TextOverlay, поле в TextStyle необязательное. */
 const FALLBACK_LINE_HEIGHT = 1.3;
@@ -98,6 +99,12 @@ function TextViewInner({
     setFrame((prev) =>
       prev.width === measured.width && prev.height === measured.height ? prev : measured,
     );
+    if (
+      node.autoWidth &&
+      (Math.abs(node.width - measured.width) > 0.5 || Math.abs(node.height - measured.height) > 0.5)
+    ) {
+      useBoardStore.getState().updateNode(node.id, measured);
+    }
   });
 
   const hitWidth = Math.max(frame.width, MIN_HIT_WIDTH);

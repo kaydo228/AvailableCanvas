@@ -171,7 +171,7 @@ describe('removeNodes', () => {
 
     board().removeNodes(['b']);
 
-    expect((nodeAt(groupId) as GroupNode).children).toEqual(['a']);
+    expect(nodeAt(groupId)).toBeUndefined();
     expect(validateDocument(board().document as BoardDocument)).toEqual([]);
   });
 });

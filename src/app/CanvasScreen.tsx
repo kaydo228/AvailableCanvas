@@ -7,15 +7,21 @@
  */
 
 import { ChevronLeft } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
-import { CanvasStage } from '@/features/canvas/engine/CanvasStage';
+import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
-import { getDocument, getProject, releaseImageCache, saveDocument } from '@/features/persistence';
+import {
+  getDocument,
+  getProject,
+  releaseImageCache,
+  saveDocument,
+  saveProjectThumbnail,
+} from '@/features/persistence';
 import { beginSaveSession, endSaveSession, useAutosave } from '@/features/persistence/autosave';
 import { describeRepairs, repairDocument } from '@/features/persistence/repair';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
@@ -28,10 +34,18 @@ type LoadState = { name: string } | null | undefined;
 
 export function CanvasScreen() {
   const { projectId } = useParams();
+  const navigate = useNavigate();
   const [state, setState] = useState<LoadState>(undefined);
+  const canvasRef = useRef<CanvasStageHandle>(null);
 
   const loadDocument = useBoardStore((s) => s.loadDocument);
   const closeDocument = useBoardStore((s) => s.closeDocument);
+  const saveThumbnail = useCallback(
+    async (thumbnail: string) => {
+      if (projectId) await saveProjectThumbnail(projectId, thumbnail);
+    },
+    [projectId],
+  );
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
   useAutosave();
@@ -107,7 +121,22 @@ export function CanvasScreen() {
     };
   }, [projectId, loadDocument, closeDocument]);
 
-  if (state === null) return <Navigate to="/" replace />;
+  if (state === null) {
+    return (
+      <main className="grid h-screen place-items-center bg-paper px-6 text-center">
+        <div>
+          <h1 className="font-medium text-ink">Проект не найден</h1>
+          <p className="mt-2 text-pencil text-sm">Возможно, его удалили в другой вкладке.</p>
+          <Link
+            to="/"
+            className="mt-5 inline-flex rounded-md bg-accent px-3 py-2 text-accent-ink text-sm"
+          >
+            К списку досок
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   if (state === undefined) {
     return (
@@ -122,6 +151,10 @@ export function CanvasScreen() {
       <header className="flex h-14 shrink-0 items-center gap-3 border-rule border-b bg-sheet px-4">
         <Link
           to="/"
+          onClick={(event) => {
+            event.preventDefault();
+            void canvasRef.current?.captureThumbnail().then(() => navigate('/'));
+          }}
           className="-ml-1 inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-pencil text-sm transition-colors hover:bg-well hover:text-ink focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
         >
           <ChevronLeft size={16} aria-hidden />
@@ -142,7 +175,7 @@ export function CanvasScreen() {
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 overflow-hidden">
           <Toolbar />
-          <CanvasStage />
+          <CanvasStage ref={canvasRef} onThumbnail={saveThumbnail} />
         </div>
         <InspectorPanel />
       </div>

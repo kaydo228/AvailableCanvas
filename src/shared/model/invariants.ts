@@ -14,7 +14,8 @@
  * из чужой версии приложения.
  */
 
-import type { BoardDocument, Endpoint, Id } from '@/shared/types/document';
+import { groupBounds } from '@/shared/model/operations';
+import type { BoardDocument, Endpoint, Id, Node } from '@/shared/types/document';
 import { ZOOM_MAX, ZOOM_MIN } from '@/shared/types/document';
 
 export interface Violation {
@@ -73,6 +74,96 @@ export function checkConnectorsNotGrouped(doc: BoardDocument): Violation[] {
         rule: 2,
         message: `линии ${id} приписан groupId — у коннектора его не бывает`,
       });
+    }
+  }
+
+  return violations;
+}
+
+/** Инвариант 2 с обеих сторон: groupId и children описывают одну вложенность. */
+export function checkGroupRelations(doc: BoardDocument): Violation[] {
+  const violations: Violation[] = [];
+  const reportedCycles = new Set<string>();
+
+  for (const [id, node] of Object.entries(doc.nodes)) {
+    if (node.type === 'connector' || node.groupId === undefined) continue;
+    const group = doc.nodes[node.groupId];
+    if (group?.type !== 'group') {
+      violations.push({
+        rule: 2,
+        message: `узел ${id} ссылается на несуществующую группу ${node.groupId}`,
+      });
+    } else if (!group.children.includes(id)) {
+      violations.push({ rule: 2, message: `узел ${id} отсутствует в children группы ${group.id}` });
+    }
+  }
+
+  for (const [id, node] of Object.entries(doc.nodes)) {
+    if (node.type !== 'group') continue;
+    const seen = new Set<Id>();
+    for (const childId of node.children) {
+      const child = doc.nodes[childId];
+      if (seen.has(childId)) {
+        violations.push({ rule: 2, message: `группа ${id} содержит ${childId} дважды` });
+      } else if (!child || child.type === 'connector' || childId === id) {
+        violations.push({ rule: 2, message: `группа ${id} содержит недопустимый узел ${childId}` });
+      } else if (child.groupId !== id) {
+        violations.push({
+          rule: 2,
+          message: `ребёнок ${childId} не ссылается обратно на группу ${id}`,
+        });
+      }
+      seen.add(childId);
+    }
+  }
+
+  for (const group of Object.values(doc.nodes)) {
+    if (group.type !== 'group') continue;
+    const chain: Id[] = [];
+    const positions = new Map<Id, number>();
+    let current: Id | undefined = group.id;
+    while (current !== undefined) {
+      const position = positions.get(current);
+      if (position !== undefined) {
+        const cycle = chain.slice(position).sort().join(', ');
+        if (!reportedCycles.has(cycle)) {
+          reportedCycles.add(cycle);
+          violations.push({ rule: 2, message: `вложенность групп содержит цикл: ${cycle}` });
+        }
+        break;
+      }
+      positions.set(current, chain.length);
+      chain.push(current);
+      const currentNode: Node | undefined = doc.nodes[current];
+      current = currentNode?.type === 'group' ? currentNode.groupId : undefined;
+    }
+  }
+
+  return violations;
+}
+
+/** Рамка группы хранится для экспорта, но остаётся производной от состава. */
+export function checkGroupFrames(doc: BoardDocument): Violation[] {
+  const violations: Violation[] = [];
+
+  for (const group of Object.values(doc.nodes)) {
+    if (group.type !== 'group') continue;
+    if (group.children.length < 2) {
+      violations.push({ rule: 2, message: `группа ${group.id} содержит меньше двух участников` });
+      continue;
+    }
+    const expected = groupBounds(doc, group.id);
+    if (!expected) {
+      violations.push({ rule: 2, message: `группа ${group.id} не имеет вычисляемой рамки` });
+      continue;
+    }
+    if (
+      group.x !== expected.x ||
+      group.y !== expected.y ||
+      group.width !== expected.width ||
+      group.height !== expected.height
+    ) {
+      violations.push({ rule: 2, message: `рамка группы ${group.id} расходится с её составом` });
     }
   }
 
@@ -139,6 +230,8 @@ export function validateDocument(doc: BoardDocument): Violation[] {
   return [
     ...checkOrderMatchesNodes(doc),
     ...checkConnectorsNotGrouped(doc),
+    ...checkGroupRelations(doc),
+    ...checkGroupFrames(doc),
     ...checkEndpointsExclusive(doc),
     ...checkZoomInRange(doc),
   ];

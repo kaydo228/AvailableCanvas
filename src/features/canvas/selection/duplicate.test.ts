@@ -135,6 +135,21 @@ describe('duplicateNodes — группы', () => {
 
     expect(validateDocument(document())).toEqual([]);
   });
+
+  it('копирует соединитель, целиком лежащий внутри группы', () => {
+    useBoardStore.setState({
+      document: doc([shape('a', 0, 0), shape('b', 200, 0), connector('l', 'a', 'b')]),
+      selection: [],
+    });
+    const groupId = board().group(['a', 'b']) as Id;
+    const copiedLine = board()
+      .duplicateNodes([groupId])
+      .map(nodeAt)
+      .find((node) => node?.type === 'connector') as ConnectorNode;
+    expect(copiedLine).toBeDefined();
+    expect(copiedLine.from.nodeId).not.toBe('a');
+    expect(copiedLine.to.nodeId).not.toBe('b');
+  });
 });
 
 describe('duplicateNodes — коннекторы', () => {

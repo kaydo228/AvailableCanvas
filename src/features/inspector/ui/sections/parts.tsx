@@ -16,7 +16,7 @@ import {
   SliderField,
   ToggleField,
 } from '@/features/inspector/ui/controls';
-import type { BoxNode, TextStyle } from '@/shared/types/document';
+import { type BoxNode, MIN_NODE_SIDE, type TextStyle } from '@/shared/types/document';
 
 /** В модели opacity 0..1, в панели — проценты. Пересчёт только здесь. */
 export const toPercent = (opacity: number): number => Math.round(opacity * 100);
@@ -91,7 +91,7 @@ export const BoxSection = ({
       <NumberField
         value={node.width}
         onChange={(width) => onPatch({ width })}
-        min={1}
+        min={MIN_NODE_SIDE}
         disabled={widthDisabled || node.locked}
       />
     </Row>
@@ -99,7 +99,7 @@ export const BoxSection = ({
       <NumberField
         value={node.height}
         onChange={(height) => onPatch({ height })}
-        min={1}
+        min={MIN_NODE_SIDE}
         disabled={node.locked}
       />
     </Row>

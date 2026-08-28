@@ -5,7 +5,16 @@
  * Отдельные зоны про стор не знают, связывание живёт здесь.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type Konva from 'konva';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Layer, Stage } from 'react-konva';
 import { AnchorHints } from '@/features/canvas/connectors/AnchorHints';
 import { useConnectorTool } from '@/features/canvas/connectors/useConnectorTool';
@@ -23,8 +32,14 @@ import { useCanvasGestures } from './useCanvasGestures';
 
 const EMPTY_VIEWPORT = { x: 0, y: 0, zoom: 1 };
 
-export function CanvasStage() {
+export type CanvasStageHandle = { captureThumbnail: () => Promise<void> };
+
+export const CanvasStage = forwardRef<
+  CanvasStageHandle,
+  { onThumbnail?: (thumbnail: string) => void | Promise<void> }
+>(function CanvasStage({ onThumbnail }, ref) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const konvaRef = useRef<Konva.Stage | null>(null);
   const [size, setSize] = useState<Size>({ width: 0, height: 0 });
 
   const viewport = useBoardStore((s) => s.document?.viewport ?? EMPTY_VIEWPORT);
@@ -37,6 +52,18 @@ export function CanvasStage() {
   // Холст — единственная точка подписки на Cmd+V, см. ImageInsertOptions.
   const images = useImageInsert({ paste: true });
   const connectors = useConnectorTool();
+
+  const captureThumbnail = useCallback(async () => {
+    const stage = konvaRef.current;
+    if (!stage || !onThumbnail) return;
+    try {
+      await onThumbnail(stage.toDataURL({ pixelRatio: 0.2 }));
+    } catch (error) {
+      console.warn('Не удалось создать превью проекта', error);
+    }
+  }, [onThumbnail]);
+
+  useImperativeHandle(ref, () => ({ captureThumbnail }), [captureThumbnail]);
 
   // Первый замер синхронный, до ResizeObserver: тот срабатывает через кадр,
   // и вставка картинки сразу после открытия проекта успевала увидеть нулевой
@@ -70,6 +97,12 @@ export function CanvasStage() {
     observer.observe(host);
     return () => observer.disconnect();
   }, [setCanvasSize]);
+
+  useEffect(() => {
+    return () => {
+      void captureThumbnail();
+    };
+  }, [captureThumbnail]);
 
   const { bind, cursor } = useCanvasGestures({
     viewport,
@@ -106,6 +139,9 @@ export function CanvasStage() {
       }}
     >
       <Stage
+        ref={(stage) => {
+          konvaRef.current = stage;
+        }}
         width={size.width}
         height={size.height}
         onMouseDown={(event) => {
@@ -142,4 +178,4 @@ export function CanvasStage() {
       <EditingOverlay />
     </div>
   );
-}
+});

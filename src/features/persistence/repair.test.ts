@@ -121,11 +121,10 @@ describe('инвариант 3 — у Endpoint ровно один из nodeId �
     expect(repairs.some((r) => r.rule === 3)).toBe(true);
   });
 
-  it('пустой конец получает точку рядом с противоположным, а не начало координат', () => {
+  it('нулевой соединитель после починки не остаётся невидимым в документе', () => {
     const { document } = repairDocument(withConnector({}, { point: { x: 300, y: 400 } }));
 
-    const c = document.nodes.c as ConnectorNode;
-    expect(c.from).toEqual({ point: { x: 300, y: 400 } });
+    expect(document.nodes.c).toBeUndefined();
   });
 
   it('nodeId в несуществующий узел — конец отвязывается в центр партнёра', () => {
@@ -170,14 +169,14 @@ describe('числа узлов', () => {
     expect(repairs).toHaveLength(1);
   });
 
-  it('отрицательный размер поднимается до единицы, а не берётся по модулю', () => {
+  it('отрицательный размер поднимается до общего минимума, а не берётся по модулю', () => {
     const { document } = repairDocument(
       broken((d) => {
         Object.assign(d.nodes.a as object, { width: -500, height: -500 });
       }),
     );
 
-    expect(document.nodes.a).toMatchObject({ width: 1, height: 1 });
+    expect(document.nodes.a).toMatchObject({ width: 8, height: 8 });
   });
 
   it('NaN в координатах обнуляется', () => {
@@ -192,7 +191,7 @@ describe('числа узлов', () => {
 });
 
 describe('группы', () => {
-  it('несуществующие дети выбрасываются', () => {
+  it('группа меньше двух участников распускается, а узел сохраняется', () => {
     const group: GroupNode = {
       id: 'g',
       type: 'group',
@@ -207,8 +206,38 @@ describe('группы', () => {
     };
     const { document, repairs } = repairDocument(doc([shape('a'), group]));
 
-    expect((document.nodes.g as GroupNode).children).toEqual(['a']);
-    expect(repairs).toHaveLength(1);
+    expect(document.nodes.g).toBeUndefined();
+    expect(document.nodes.a).toBeDefined();
+    expect(repairs.length).toBeGreaterThan(0);
+  });
+
+  it('groupId имеет приоритет и восстанавливает children без коннектора', () => {
+    const group: GroupNode = {
+      id: 'g',
+      type: 'group',
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      children: ['a', 'c'],
+    };
+    const a = { ...shape('a'), groupId: 'g' };
+    const b = { ...shape('b', 200, 0), groupId: 'g' };
+    const { document } = repairDocument(doc([a, b, connector('c', 'a', 'b'), group]));
+    expect((document.nodes.g as GroupNode).children).toEqual(['a', 'b']);
+  });
+
+  it('обрезает текст в импортированном документе с отчётом о починке', () => {
+    const text = {
+      ...shape('a'),
+      label: { value: 'x'.repeat(10_001), fontSize: 14, color: '#000', align: 'left' as const },
+    };
+    const { document, repairs } = repairDocument(doc([text]));
+    expect((document.nodes.a as typeof text).label?.value).toHaveLength(10_000);
+    expect(repairs.some((repair) => repair.what.includes('сокращён'))).toBe(true);
   });
 });
 

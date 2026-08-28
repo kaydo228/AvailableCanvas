@@ -72,7 +72,7 @@ test('порча не переживает круг через IndexedDB', async
   // отдельным чтением из IndexedDB уже на экране холста.
   await page.waitForFunction(() => window.__board.getState().document !== null);
 
-  const healthy = { zoom: 0.1, order: ['a'], width: 1, opacity: 1 };
+  const healthy = { zoom: 0.1, order: ['a'], width: 8, opacity: 1 };
   expect(await viewState(page)).toEqual(healthy);
 
   // Перезагрузка читает документ уже из базы: он должен быть записан
@@ -107,7 +107,7 @@ test('экспорт порченой доски отдаёт уже здоро�
   expect(file.document.viewport.zoom).toBe(0.1);
   expect(file.document.order).toEqual(['a']);
   expect(file.document.nodes.a.opacity).toBe(1);
-  expect(file.document.nodes.a.width).toBe(1);
+  expect(file.document.nodes.a.width).toBe(8);
 });
 
 test('здоровый файл открывается без единого слова о починке', async ({ page }) => {

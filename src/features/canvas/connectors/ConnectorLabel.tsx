@@ -43,7 +43,7 @@ export function ConnectorLabel({
         height={height - PADDING_Y * 2}
         text={label.value}
         fontSize={fontSize}
-        fontFamily="Inter, system-ui, sans-serif"
+        fontFamily="Golos Text, system-ui, sans-serif"
         fill={label.color}
         align="center"
         verticalAlign="middle"

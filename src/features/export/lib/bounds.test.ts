@@ -48,6 +48,17 @@ test('свободный конец коннектора учитывается,
   });
 });
 
+test('рамка учитывает изгиб кривого соединителя, а не только его концы', () => {
+  const line: ConnectorNode = {
+    ...connector('c', 'a', 'b'),
+    routing: 'curve',
+    from: { nodeId: 'a', anchor: 'top' },
+    to: { nodeId: 'b', anchor: 'top' },
+  };
+  const document = doc([shape('a', 0, 0), shape('b', 300, 0), line]);
+  expect(boundsOf(document, ['c'], 0)?.y).toBeLessThan(0);
+});
+
 test('пустое выделение — считать нечего', () => {
   expect(boundsOf(doc([shape('a')]), [])).toBeNull();
 });

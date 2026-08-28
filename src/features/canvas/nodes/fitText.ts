@@ -73,7 +73,7 @@ export const measureWithCanvas: MeasureText = (text, fontSize, maxWidth) => {
   const context = document.createElement('canvas').getContext('2d');
   if (!context) return { width: 0, height: 0 };
 
-  context.font = `${fontSize}px Inter, system-ui, sans-serif`;
+  context.font = `${fontSize}px Golos Text, system-ui, sans-serif`;
 
   const lineHeight = fontSize * 1.3;
   let widest = 0;

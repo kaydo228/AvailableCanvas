@@ -18,6 +18,7 @@ import {
   endpointAt,
   nearestAnchor,
   nodeAtPoint,
+  pointEndpoint,
   referencePoint,
   resolveEndpoint,
   type SideAnchor,
@@ -118,11 +119,24 @@ export function useConnectorTool() {
       if (isTooShort(fromPoint, point, document.viewport.zoom)) return;
 
       const to = endpointAt(document, point, document.viewport.zoom);
+      const safe = (endpoint: Endpoint, fallback: WorldPoint): Endpoint =>
+        endpoint.nodeId !== undefined && document.nodes[endpoint.nodeId] === undefined
+          ? pointEndpoint(fallback)
+          : endpoint;
+      const safeFrom = safe(from, fromPoint);
+      const safeTo = safe(to, point);
 
       // Линия из фигуры в неё же саму — этап 1 и 2 её не рисуют осмысленно.
-      if (from.nodeId && from.nodeId === to.nodeId) return;
+      if (safeFrom.nodeId && safeFrom.nodeId === safeTo.nodeId) return;
+      if (
+        safeFrom.point !== undefined &&
+        safeTo.point !== undefined &&
+        safeFrom.point.x === safeTo.point.x &&
+        safeFrom.point.y === safeTo.point.y
+      )
+        return;
 
-      const id = connect(from, to);
+      const id = connect(safeFrom, safeTo);
       select([id]);
       setTool('select');
     },

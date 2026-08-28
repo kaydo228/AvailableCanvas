@@ -16,6 +16,7 @@ import { connectorEnds, nodeEndpoint, pointEndpoint } from '@/features/canvas/co
 import type { Rect, Size } from '@/features/canvas/engine/contract';
 import { DEFAULT_GRID_STEP } from '@/features/canvas/engine/grid';
 import {
+  clampZoom,
   fitToBox,
   panBy as panViewportBy,
   zoomAt as zoomViewportAt,
@@ -34,6 +35,7 @@ import { boardHistory } from '@/features/history/model/temporal';
 import {
   clampOpacity,
   groupBounds,
+  groupHasRotatedDescendant,
   removeNodes as removeNodesFromDocument,
   topmostGroup,
   withGroupDescendants,
@@ -49,6 +51,7 @@ import type {
   Node,
   Viewport,
 } from '@/shared/types/document';
+import { limitText, MIN_NODE_SIDE } from '@/shared/types/document';
 
 /** Инструменты из раздела 6.2 ТЗ. */
 export type Tool =
@@ -186,6 +189,7 @@ function resyncGroups(document: BoardDocument, touched: Iterable<Id>): void {
 
   for (const id of touched) {
     const node = document.nodes[id];
+    if (node?.type === 'group') pending.add(id);
     const parent = node && node.type !== 'connector' ? node.groupId : undefined;
     if (parent !== undefined) pending.add(parent);
   }
@@ -205,6 +209,56 @@ function resyncGroups(document: BoardDocument, touched: Iterable<Id>): void {
 
     if (group.groupId !== undefined) pending.add(group.groupId);
   }
+}
+
+/** Убирает группы, которые после удаления перестали быть контейнерами. */
+function dissolveSmallGroups(document: BoardDocument): Id[] {
+  const removed: Id[] = [];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const group of Object.values(document.nodes)) {
+      if (group.type !== 'group' || group.children.length > 1) continue;
+      const [childId] = group.children;
+      const parent = group.groupId === undefined ? undefined : document.nodes[group.groupId];
+      const child = childId === undefined ? undefined : document.nodes[childId];
+      if (child && child.type !== 'connector') {
+        if (parent?.type === 'group') child.groupId = parent.id;
+        else delete child.groupId;
+      }
+      if (parent?.type === 'group') {
+        parent.children = parent.children
+          .filter((id) => id !== group.id)
+          .concat(childId === undefined || parent.children.includes(childId) ? [] : [childId]);
+      }
+      delete document.nodes[group.id];
+      document.order = document.order.filter((id) => id !== group.id);
+      removed.push(group.id);
+      changed = true;
+      break;
+    }
+  }
+  return removed;
+}
+
+/** Нулевой отрезок не видно и нельзя выделить, хранить его бессмысленно. */
+function removeZeroLengthConnectors(document: BoardDocument): Id[] {
+  const removed = Object.values(document.nodes)
+    .filter(
+      (node) =>
+        node.type === 'connector' &&
+        node.from.point !== undefined &&
+        node.to.point !== undefined &&
+        node.from.point.x === node.to.point.x &&
+        node.from.point.y === node.to.point.y,
+    )
+    .map((node) => node.id);
+  for (const id of removed) delete document.nodes[id];
+  if (removed.length) {
+    const gone = new Set(removed);
+    document.order = document.order.filter((id) => !gone.has(id));
+  }
+  return removed;
 }
 
 /**
@@ -293,7 +347,7 @@ const rotationOf = (patch: NodePatch): number | undefined =>
   'rotation' in patch ? patch.rotation : undefined;
 
 /** Приводит патч к тому, что модель считает допустимым. */
-const sanitize = (patch: NodePatch): NodePatch => {
+const sanitize = (patch: NodePatch, current: Node): NodePatch => {
   const opacity = patch.opacity === undefined ? {} : { opacity: clampOpacity(patch.opacity) };
 
   // Угол нормализуется и здесь, хотя за него отвечает rotateNode: панель
@@ -302,7 +356,36 @@ const sanitize = (patch: NodePatch): NodePatch => {
   const angle = rotationOf(patch);
   const rotation = angle === undefined ? {} : { rotation: normalizeAngle(angle) };
 
-  return { ...patch, ...opacity, ...rotation };
+  const text =
+    'text' in patch && patch.text !== undefined
+      ? { text: { ...patch.text, value: limitText(patch.text.value) } }
+      : {};
+  const label =
+    'label' in patch && patch.label !== undefined
+      ? { label: { ...patch.label, value: limitText(patch.label.value) } }
+      : {};
+  if (current.type === 'connector') return { ...patch, ...opacity, ...label };
+
+  const hasBoxPatch = ['x', 'y', 'width', 'height'].some((key) => key in patch);
+  if (!hasBoxPatch) return { ...patch, ...opacity, ...rotation, ...text, ...label };
+
+  const boxPatch = patch as NodePatch & Partial<Box>;
+  const box = sanitizeBox(
+    {
+      x: boxPatch.x ?? current.x,
+      y: boxPatch.y ?? current.y,
+      width: boxPatch.width ?? current.width,
+      height: boxPatch.height ?? current.height,
+    },
+    current,
+  );
+  const geometry = {
+    ...(boxPatch.x === undefined ? {} : { x: box.x }),
+    ...(boxPatch.y === undefined ? {} : { y: box.y }),
+    ...(boxPatch.width === undefined ? {} : { width: box.width }),
+    ...(boxPatch.height === undefined ? {} : { height: box.height }),
+  };
+  return { ...patch, ...opacity, ...rotation, ...text, ...label, ...geometry };
 };
 
 /**
@@ -325,6 +408,29 @@ const sanitizeBox = (box: Box, current: Box): Box =>
     width: Number.isFinite(box.width) ? box.width : current.width,
     height: Number.isFinite(box.height) ? box.height : current.height,
   });
+
+const groupMinimumSize = (document: BoardDocument, group: GroupNode, before: Box) => {
+  let width = MIN_NODE_SIDE;
+  let height = MIN_NODE_SIDE;
+  for (const id of withGroupDescendants(document, group.children)) {
+    const node = document.nodes[id];
+    if (!node || node.type === 'connector' || node.type === 'group') continue;
+    width = Math.max(width, (before.width * MIN_NODE_SIDE) / node.width);
+    height = Math.max(height, (before.height * MIN_NODE_SIDE) / node.height);
+  }
+  return { width, height };
+};
+
+const sanitizeGroupBox = (
+  box: Box,
+  current: Box,
+  minimum: { width: number; height: number },
+): Box => ({
+  x: Number.isFinite(box.x) ? box.x : current.x,
+  y: Number.isFinite(box.y) ? box.y : current.y,
+  width: Math.max(minimum.width, Number.isFinite(box.width) ? box.width : current.width),
+  height: Math.max(minimum.height, Number.isFinite(box.height) ? box.height : current.height),
+});
 
 /**
  * Отмена и возврат (FR-10) — middleware zundo поверх immer. Что попадает
@@ -394,9 +500,16 @@ export const useBoardStore = create<BoardState>()(
             const kept = node.children.filter((child) => !gone.has(child));
             if (kept.length !== node.children.length) node.children = kept;
           }
-          resyncGroups(state.document, expanded);
+          const dissolved = dissolveSmallGroups(state.document);
+          const zeroLength = removeZeroLengthConnectors(state.document);
+          resyncGroups(
+            state.document,
+            Object.values(state.document.nodes)
+              .filter((node): node is GroupNode => node.type === 'group')
+              .map((group) => group.id),
+          );
 
-          const doomed = new Set(expanded);
+          const doomed = new Set([...expanded, ...dissolved, ...zeroLength]);
           state.selection = state.selection.filter((id) => !doomed.has(id));
           if (state.editingNodeId && doomed.has(state.editingNodeId)) {
             state.editingNodeId = null;
@@ -413,7 +526,7 @@ export const useBoardStore = create<BoardState>()(
         set((state) => {
           const node = state.document?.nodes[id];
           if (!node) return;
-          Object.assign(node, sanitize(patch));
+          Object.assign(node, sanitize(patch, node));
           // Перетаскивание узла идёт через updateNode на каждом кадре —
           // рамка группы обязана ехать вместе с ним.
           if (state.document) resyncGroups(state.document, [id]);
@@ -422,10 +535,9 @@ export const useBoardStore = create<BoardState>()(
       updateNodes: (ids, patch) =>
         set((state) => {
           if (!state.document) return;
-          const clean = sanitize(patch);
           for (const id of ids) {
             const node = state.document.nodes[id];
-            if (node) Object.assign(node, clean);
+            if (node) Object.assign(node, sanitize(patch, node));
           }
           resyncGroups(state.document, ids);
         }),
@@ -492,7 +604,22 @@ export const useBoardStore = create<BoardState>()(
             width: node.width,
             height: node.height,
           };
-          const after = sanitizeBox(box, before);
+          const minimum = groupMinimumSize(document, node, before);
+          let after = sanitizeGroupBox(box, before, minimum);
+
+          // В модели нет skew, поэтому повёрнутый состав масштабируем только
+          // равномерно: иначе производная рамка и реальные фигуры расходятся.
+          if (groupHasRotatedDescendant(document, id)) {
+            const minimumScale = Math.max(
+              minimum.width / before.width,
+              minimum.height / before.height,
+            );
+            const scale = Math.max(
+              minimumScale,
+              Math.min(after.width / before.width, after.height / before.height),
+            );
+            after = { ...after, width: before.width * scale, height: before.height * scale };
+          }
 
           // Нулевая сторона: масштаб от неё — деление на ноль. Тогда группа
           // только переезжает, размер содержимого остаётся прежним.
@@ -515,20 +642,15 @@ export const useBoardStore = create<BoardState>()(
              * иначе состав разъехался бы относительно рамки — фигуры выросли,
              * а промежутки между ними остались прежними.
              *
-             * clampSize на каждом ребёнке отдельно: при сильном сжатии
-             * пропорция мелкой фигуры важнее, чем то, что её нельзя поймать
-             * мышью. Рамка группы после этого может оказаться чуть больше
-             * запрошенной — потому и пересчитывается по факту, ниже.
+             * Минимум вычислен для группы целиком; зажимать детей по одному
+             * нельзя, иначе обратный resize разрушит их пропорции.
              */
-            Object.assign(
-              child,
-              clampSize({
-                x: after.x + (child.x - before.x) * scaleX,
-                y: after.y + (child.y - before.y) * scaleY,
-                width: child.width * scaleX,
-                height: child.height * scaleY,
-              }),
-            );
+            Object.assign(child, {
+              x: after.x + (child.x - before.x) * scaleX,
+              y: after.y + (child.y - before.y) * scaleY,
+              width: child.width * scaleX,
+              height: child.height * scaleY,
+            });
           }
 
           // По факту получившегося состава — и вверх, до внешних групп.
@@ -619,6 +741,20 @@ export const useBoardStore = create<BoardState>()(
         if (!document) return [];
 
         const sources = withGroupDescendants(document, ids).filter((id) => document.nodes[id]);
+        const copied = new Set(sources);
+        for (const node of Object.values(document.nodes)) {
+          if (
+            node.type === 'connector' &&
+            !copied.has(node.id) &&
+            node.from.nodeId !== undefined &&
+            node.to.nodeId !== undefined &&
+            copied.has(node.from.nodeId) &&
+            copied.has(node.to.nodeId)
+          ) {
+            sources.push(node.id);
+            copied.add(node.id);
+          }
+        }
         if (sources.length === 0) return [];
 
         // id копий выдаются заранее, до сборки узлов: перевязка ссылок
@@ -792,7 +928,23 @@ export const useBoardStore = create<BoardState>()(
 
       // ─── Коннекторы: реализовано, зона A ──────────────────────────────────
       connect: (from, to) => {
-        const connector = createConnector(from, to);
+        const document = get().document;
+        const point = (endpoint: Endpoint, fallback: { x: number; y: number }): Endpoint => {
+          if (endpoint.nodeId !== undefined) {
+            const node = document?.nodes[endpoint.nodeId];
+            if (node && node.type !== 'connector')
+              return nodeEndpoint(endpoint.nodeId, endpoint.anchor ?? 'auto');
+          }
+          if (
+            endpoint.point &&
+            Number.isFinite(endpoint.point.x) &&
+            Number.isFinite(endpoint.point.y)
+          ) {
+            return pointEndpoint(endpoint.point);
+          }
+          return pointEndpoint(fallback);
+        };
+        const connector = createConnector(point(from, { x: 0, y: 0 }), point(to, { x: 0, y: 0 }));
         set((state) => {
           if (!state.document) return;
           state.document.nodes[connector.id] = connector;
@@ -878,13 +1030,23 @@ export const useBoardStore = create<BoardState>()(
       // ─── Вид: реализовано, зона A ─────────────────────────────────────────
       setViewport: (viewport) =>
         set((state) => {
-          if (state.document) state.document.viewport = viewport;
+          if (!state.document) return;
+          const current = state.document.viewport;
+          state.document.viewport = {
+            x: Number.isFinite(viewport.x) ? viewport.x : current.x,
+            y: Number.isFinite(viewport.y) ? viewport.y : current.y,
+            zoom: clampZoom(viewport.zoom),
+          };
         }),
 
       panBy: (dx, dy) =>
         set((state) => {
           if (state.document) {
-            state.document.viewport = panViewportBy(state.document.viewport, dx, dy);
+            state.document.viewport = panViewportBy(
+              state.document.viewport,
+              Number.isFinite(dx) ? dx : 0,
+              Number.isFinite(dy) ? dy : 0,
+            );
           }
         }),
 

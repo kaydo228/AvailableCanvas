@@ -89,7 +89,7 @@ function StickyViewInner({
           height={innerHeight}
           text={node.text.value}
           fontSize={fitted.fontSize}
-          fontFamily="Inter, system-ui, sans-serif"
+          fontFamily="Golos Text, system-ui, sans-serif"
           fill={node.text.color}
           align={node.text.align}
           verticalAlign="middle"

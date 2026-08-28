@@ -27,4 +27,4 @@ pre-commit:
 
     - name: biome
       glob: '*.{ts,tsx,js,jsx,json,jsonc,css}'
-      run: npx biome check {staged_files}
+      run: sh -c 'test "$#" -eq 0 || npx biome check "$@"' -- {staged_files}
