@@ -17,7 +17,7 @@
  * четырёхкратном приближении вместо точек были бы кляксы.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { Layer, Shape } from 'react-konva';
 
 import type { GridProps } from './contract';
@@ -27,12 +27,45 @@ import { computeGridLayout, DEFAULT_GRID_COLOR, DEFAULT_GRID_STEP } from './grid
 const DOT_SIZE = 2;
 const DOT_OFFSET = DOT_SIZE / 2;
 
-export const GridLayer = ({
-  viewport,
-  size,
-  step = DEFAULT_GRID_STEP,
-  color = DEFAULT_GRID_COLOR,
-}: GridProps) => {
+/**
+ * Цвет точек — токен `--grid-dot` из index.css, тот же, что у миниатюры доски.
+ * Konva рисует в canvas, CSS-переменную ему не передать, поэтому значение
+ * читается вычисленным. Пересчитывать надо на смене темы, а тема меняется
+ * двумя способами: явный выбор ставит `data-theme` на <html>, системная
+ * ходит за медиазапросом — отсюда два источника подписки.
+ */
+const computeDotColor = () =>
+  getComputedStyle(document.documentElement).getPropertyValue('--grid-dot').trim() ||
+  DEFAULT_GRID_COLOR;
+
+/**
+ * Значение кэшируется: getSnapshot зовётся на каждый рендер, а рендер тут
+ * идёт на каждый шаг панорамирования — getComputedStyle на горячем пути
+ * означал бы принудительный пересчёт стилей на кадр.
+ */
+let cachedDotColor: string | null = null;
+const readDotColor = () => (cachedDotColor ??= computeDotColor());
+
+const subscribeToTheme = (onChange: () => void) => {
+  const refresh = () => {
+    cachedDotColor = computeDotColor();
+    onChange();
+  };
+  const observer = new MutationObserver(refresh);
+  observer.observe(document.documentElement, { attributeFilter: ['data-theme'] });
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  media.addEventListener('change', refresh);
+  return () => {
+    observer.disconnect();
+    media.removeEventListener('change', refresh);
+  };
+};
+
+const useDotColor = () =>
+  useSyncExternalStore(subscribeToTheme, readDotColor, () => DEFAULT_GRID_COLOR);
+
+export const GridLayer = ({ viewport, size, step = DEFAULT_GRID_STEP, color }: GridProps) => {
+  const themeColor = useDotColor();
   // Раскладка пересчитывается только при смене вида, размера или шага.
   // Зависимости — примитивы, а не объекты: `viewport` и `size` прилетают
   // новыми объектами на каждый рендер родителя, по ним мемоизация была бы
@@ -52,7 +85,7 @@ export const GridLayer = ({
         // Отрисовка без промежуточного буфера: буфер нужен только для
         // «идеальной» композиции заливки со штрихом, а у нас голая заливка.
         perfectDrawEnabled={false}
-        fill={color}
+        fill={color ?? themeColor}
         // ПОЧЕМУ ОДИН Shape, А НЕ ТЫСЯЧИ <Circle>.
         //
         // Каждый <Circle> — это узел Konva: собственный объект с атрибутами,
