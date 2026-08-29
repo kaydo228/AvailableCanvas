@@ -24,3 +24,6 @@ test-results/
 # Индекс кодовой базы (эксперимент F-1): артефакты и локальный скилл.
 graphify-out/
 .claude/skills/graphify/
+
+# Disposable fixtures with active prompt-injection payloads. Never commit.
+.experiment/injection/
