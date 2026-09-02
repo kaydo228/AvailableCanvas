@@ -21,7 +21,11 @@ export const DEFAULT_FONT_SIZE = 16;
 /** Межстрочный по умолчанию. То же значение, что и в TextOverlay/TextView. */
 export const DEFAULT_LINE_HEIGHT = 1.3;
 
-/** Не чистый чёрный: на белом фоне он выглядит грязно и «дешевит» текст. */
+/**
+ * Не чистый чёрный: на белом фоне он выглядит грязно и «дешевит» текст.
+ * Это запасной цвет для светлой темы — обычно цвет приходит параметром
+ * из темы (`themeInk`), иначе на тёмной доске новый текст не видно.
+ */
 export const DEFAULT_TEXT_COLOR = '#111827';
 
 /**
@@ -50,7 +54,11 @@ export type TextNodeOverrides = Partial<Omit<TextNode, 'id' | 'type'>>;
  * `overrides.text` заменяет стиль целиком, а не сливается по полям:
  * частичное слияние двух источников стиля читается хуже, чем один явный.
  */
-export function createTextNode(rect: Rect, overrides: TextNodeOverrides = {}): TextNode {
+export function createTextNode(
+  rect: Rect,
+  overrides: TextNodeOverrides = {},
+  color: string = DEFAULT_TEXT_COLOR,
+): TextNode {
   const base: TextNode = {
     id: crypto.randomUUID(),
     type: 'text',
@@ -67,7 +75,7 @@ export function createTextNode(rect: Rect, overrides: TextNodeOverrides = {}): T
     text: {
       value: '',
       fontSize: DEFAULT_FONT_SIZE,
-      color: DEFAULT_TEXT_COLOR,
+      color,
       align: 'left',
       lineHeight: DEFAULT_LINE_HEIGHT,
     },
@@ -91,19 +99,28 @@ export function createTextNode(rect: Rect, overrides: TextNodeOverrides = {}): T
  * тот же дрожащий сдвиг мыши — это всё ещё клик по экрану, но вчетверо
  * больший сдвиг в мире.
  */
-export function textFromDrag(start: WorldPoint, current: WorldPoint, zoom: number): TextNode {
+export function textFromDrag(
+  start: WorldPoint,
+  current: WorldPoint,
+  zoom: number,
+  color: string = DEFAULT_TEXT_COLOR,
+): TextNode {
   if (isClick(start, current, zoom)) {
     const rect = rectAround(start, DEFAULT_TEXT_SIZE.width, DEFAULT_TEXT_SIZE.height);
-    return createTextNode(rect, { autoWidth: true });
+    return createTextNode(rect, { autoWidth: true }, color);
   }
 
   const rect = normalizeRect(start, current);
 
-  return createTextNode(rect, {
-    autoWidth: false,
-    width: Math.max(rect.width, MIN_TEXT_SIZE.width),
-    height: Math.max(rect.height, MIN_TEXT_SIZE.height),
-  });
+  return createTextNode(
+    rect,
+    {
+      autoWidth: false,
+      width: Math.max(rect.width, MIN_TEXT_SIZE.width),
+      height: Math.max(rect.height, MIN_TEXT_SIZE.height),
+    },
+    color,
+  );
 }
 
 /**

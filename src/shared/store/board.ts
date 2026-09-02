@@ -36,6 +36,7 @@ import {
   clampOpacity,
   groupBounds,
   groupHasRotatedDescendant,
+  nodesToCopy,
   removeNodes as removeNodesFromDocument,
   topmostGroup,
   withGroupDescendants,
@@ -111,6 +112,12 @@ export interface BoardState {
   resizeNode(id: Id, box: Box): void;
   rotateNode(id: Id, degrees: number): void;
   duplicateNodes(ids: Id[]): Id[];
+  /**
+   * Вставка узлов со стороны — из буфера обмена (зона B). Узлы приходят
+   * снимком: доски, с которой их копировали, может уже не быть на экране.
+   * Возвращает id вставленных копий, они же становятся выделением.
+   */
+  pasteNodes(nodes: Node[]): Id[];
 
   // ─── Порядок слоёв ──────────────────────────────────────────────────────
   bringForward(ids: Id[]): void;
@@ -588,6 +595,13 @@ export const useBoardStore = create<BoardState>()(
 
           if (node.type !== 'group') {
             Object.assign(node, sanitizeBox(box, node));
+            /*
+             * Растянули текст руками — значит ширина больше не «по содержимому».
+             * Без этого TextView меряет строку и тут же возвращает рамку назад
+             * (он так и задуман при autoWidth), и ручки выглядят сломанными:
+             * тянешь за край, отпускаешь — узел прежнего размера.
+             */
+            if (node.type === 'text') node.autoWidth = false;
             // Рамка группы-родителя обязана поехать за участником.
             resyncGroups(document, [id]);
             return;
@@ -740,21 +754,8 @@ export const useBoardStore = create<BoardState>()(
         const document = get().document;
         if (!document) return [];
 
-        const sources = withGroupDescendants(document, ids).filter((id) => document.nodes[id]);
-        const copied = new Set(sources);
-        for (const node of Object.values(document.nodes)) {
-          if (
-            node.type === 'connector' &&
-            !copied.has(node.id) &&
-            node.from.nodeId !== undefined &&
-            node.to.nodeId !== undefined &&
-            copied.has(node.from.nodeId) &&
-            copied.has(node.to.nodeId)
-          ) {
-            sources.push(node.id);
-            copied.add(node.id);
-          }
-        }
+        // Тот же набор, что уходит в буфер обмена, — см. nodesToCopy.
+        const sources = nodesToCopy(document, ids);
         if (sources.length === 0) return [];
 
         // id копий выдаются заранее, до сборки узлов: перевязка ссылок
@@ -782,6 +783,49 @@ export const useBoardStore = create<BoardState>()(
           resyncGroups(state.document, created);
           // Выделение переезжает на копии — как после group(): дальше человек
           // работает с тем, что только что создал, а не с оригиналом.
+          state.selection = created;
+        });
+
+        return [...clones.values()];
+      },
+
+      pasteNodes: (incoming) => {
+        if (!get().document || incoming.length === 0) return [];
+
+        /*
+         * Снимок собирается в синтетический документ: `duplicateNode` берёт
+         * из него координаты концов линий и состав групп, а исходной доски
+         * под рукой нет — узлы могли приехать из другого проекта или из
+         * другой вкладки. Всё, на что снимок не ссылается внутри себя,
+         * отвяжется само — ровно как при дублировании.
+         */
+        const source: BoardDocument = {
+          projectId: '',
+          schemaVersion: 1,
+          nodes: Object.fromEntries(incoming.map((node) => [node.id, node])),
+          order: incoming.map((node) => node.id),
+          viewport: { x: 0, y: 0, zoom: 1 },
+          background: { color: '', grid: 'none' },
+        };
+        const sources = nodesToCopy(source, source.order);
+        const clones = new Map<Id, Id>(sources.map((id) => [id, nanoid()]));
+
+        set((state) => {
+          if (!state.document) return;
+
+          for (const id of sources) {
+            const node = source.nodes[id];
+            const copyId = clones.get(id);
+            if (!node || copyId === undefined) continue;
+
+            // Инвариант 1: и в nodes, и в order. В конец — вставленное ложится
+            // поверх, как и копия при Cmd+D.
+            state.document.nodes[copyId] = duplicateNode(node, source, clones, copyId);
+            state.document.order.push(copyId);
+          }
+
+          const created = [...clones.values()];
+          resyncGroups(state.document, created);
           state.selection = created;
         });
 

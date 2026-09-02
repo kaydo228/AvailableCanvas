@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createTextNode,
   DEFAULT_FONT_SIZE,
+  DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_SIZE,
   MIN_TEXT_SIZE,
   shouldRemoveOnBlur,
@@ -11,6 +12,20 @@ import {
 import { doc } from '@/shared/model/fixtures';
 
 const P = (x: number, y: number) => ({ x, y });
+
+describe('цвет текста', () => {
+  it('по умолчанию — цвет для светлой темы', () => {
+    expect(createTextNode({ x: 0, y: 0, width: 10, height: 10 }).text.color).toBe(
+      DEFAULT_TEXT_COLOR,
+    );
+  });
+
+  it('переданный цвет доходит и до клика, и до протяжки', () => {
+    // На тёмной доске цвет приходит из темы: тёмный текст там не виден вовсе.
+    expect(textFromDrag(P(0, 0), P(0, 0), 1, '#e9ece6').text.color).toBe('#e9ece6');
+    expect(textFromDrag(P(0, 0), P(300, 80), 1, '#e9ece6').text.color).toBe('#e9ece6');
+  });
+});
 
 describe('textFromDrag — клик против протяжки', () => {
   it('клик даёт точку вставки с autoWidth', () => {

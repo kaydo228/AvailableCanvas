@@ -15,6 +15,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 
 import type { Rect } from '@/features/canvas/engine/contract';
 import { toScreen } from '@/features/canvas/engine/viewport';
+import { fontStack } from '@/features/canvas/nodes/textStyle';
 import { MAX_TEXT_LENGTH, type TextStyle, type Viewport } from '@/shared/types/document';
 
 export interface TextOverlayProps {
@@ -127,11 +128,15 @@ export function TextOverlay({
           background: 'transparent',
           pointerEvents: 'auto',
           color: style.color,
-          fontFamily: 'Golos Text, system-ui, sans-serif',
+          fontFamily: fontStack(style.font),
           fontSize: style.fontSize * viewport.zoom,
           lineHeight: style.lineHeight ?? 1.3,
           fontWeight: style.bold ? 600 : 400,
           fontStyle: style.italic ? 'italic' : 'normal',
+          textDecoration: style.underline ? 'underline' : 'none',
+          // Разрядка в мировых единицах — на экране её масштабирует зум,
+          // ровно как кегль. Иначе на приближении буквы съезжаются.
+          letterSpacing: (style.letterSpacing ?? 0) * viewport.zoom,
           textAlign: style.align,
         }}
       />

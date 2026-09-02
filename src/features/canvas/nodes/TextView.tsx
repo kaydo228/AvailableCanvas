@@ -33,6 +33,7 @@ import { useBoardStore } from '@/shared/store/board';
 import type { TextNode } from '@/shared/types/document';
 
 import type { NodeViewProps } from './contract';
+import { fontStack } from './textStyle';
 
 /**
  * Поле между рамкой узла и текстом, в мировых единицах.
@@ -40,9 +41,6 @@ import type { NodeViewProps } from './contract';
  * в правку и выходе из неё текст обязан остаться на том же месте.
  */
 export const TEXT_PADDING = 8;
-
-/** Тот же стек, что и у textarea в TextOverlay: иначе метрики разъедутся. */
-const FONT_FAMILY = 'Golos Text, system-ui, sans-serif';
 
 /** Запасной межстрочный — как в TextOverlay, поле в TextStyle необязательное. */
 const FALLBACK_LINE_HEIGHT = 1.3;
@@ -57,6 +55,9 @@ const FALLBACK_LINE_HEIGHT = 1.3;
 const MIN_HIT_WIDTH = 24;
 
 const SELECTION_STROKE = '#2563eb';
+
+/** Скругление подложки. Прямые углы под текстом читаются как «фон приклеился». */
+const BACKGROUND_RADIUS = 4;
 
 function TextViewInner({
   node,
@@ -110,6 +111,9 @@ function TextViewInner({
   const hitWidth = Math.max(frame.width, MIN_HIT_WIDTH);
   const hitHeight = Math.max(frame.height, lineBox);
 
+  // Подложка рисуется и во время правки: иначе фон моргает на входе в textarea.
+  const background = style.background ?? '';
+
   // Ширина у autoWidth не задаётся вовсе — Konva считает её по содержимому.
   // Присвоение width={undefined} запрещено (exactOptionalPropertyTypes),
   // поэтому пропс не пишется, а подмешивается.
@@ -129,13 +133,20 @@ function TextViewInner({
       onDblClick={() => onStartEditing(node.id)}
     >
       {/*
-        Прозрачный прямоугольник — единственная область попадания узла.
+        Прямоугольник рамки — единственная область попадания узла и заодно
+        подложка под текстом, когда она задана.
         Сам `Text` из hit-теста выключен: попасть в него можно только по
         глифам, и клик в просвет между словами промахивается мимо узла.
         Прозрачная заливка на hit-канвасе рисуется цветовым ключом, так что
         область работает, оставаясь невидимой.
       */}
-      <Rect width={hitWidth} height={hitHeight} fill="transparent" />
+      <Rect
+        width={hitWidth}
+        height={hitHeight}
+        fill={background || 'transparent'}
+        cornerRadius={background ? BACKGROUND_RADIUS : 0}
+        perfectDrawEnabled={false}
+      />
 
       {!editing && (
         <Text
@@ -144,8 +155,10 @@ function TextViewInner({
           perfectDrawEnabled={false}
           text={style.value}
           fontSize={style.fontSize}
-          fontFamily={FONT_FAMILY}
+          fontFamily={fontStack(style.font)}
           fontStyle={fontStyle}
+          textDecoration={style.underline ? 'underline' : ''}
+          letterSpacing={style.letterSpacing ?? 0}
           lineHeight={lineHeight}
           align={style.align}
           fill={style.color}

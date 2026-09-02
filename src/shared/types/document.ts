@@ -65,6 +65,13 @@ export interface BaseNode {
   groupId?: Id;
 }
 
+/**
+ * Гарнитура — КЛЮЧ пресета, а не CSS-стек: файл открывается на чужой машине,
+ * где перечисленных шрифтов может не быть, и стек обязан подставляться там,
+ * а не сохраняться здесь. Сами стеки — в `canvas/nodes/fonts.ts`.
+ */
+export type TextFont = 'sans' | 'serif' | 'mono';
+
 export interface TextStyle {
   value: string;
   fontSize: number;
@@ -72,7 +79,13 @@ export interface TextStyle {
   align: 'left' | 'center' | 'right';
   bold?: boolean;
   italic?: boolean;
+  underline?: boolean;
   lineHeight?: number;
+  /** Разрядка в мировых единицах. Отрицательная — поджатие. */
+  letterSpacing?: number;
+  /** Подложка под текстом. Пустая строка — без подложки. Рисует её TextView. */
+  background?: string;
+  font?: TextFont;
 }
 
 export interface ShapeNode extends BaseNode {

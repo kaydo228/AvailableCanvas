@@ -9,6 +9,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { createTextNode } from '@/features/canvas/tools/textTool';
 import { connector, doc, shape } from '@/shared/model/fixtures';
 import { validateDocument } from '@/shared/model/invariants';
 import { useBoardStore } from '@/shared/store/board';
@@ -52,6 +53,17 @@ describe('resizeNode', () => {
 
     // x и height были 0 и 60 — их и оставили; остальное применилось.
     expect(nodeAt('a')).toMatchObject({ x: 0, y: 0, width: 200, height: 60 });
+  });
+
+  it('растянутый текст перестаёт быть «по содержимому»', () => {
+    const text = createTextNode({ x: 0, y: 0, width: 200, height: 40 }, { autoWidth: true });
+    useBoardStore.setState({ document: doc([text]), selection: [] });
+
+    board().resizeNode(text.id, { x: 0, y: 0, width: 400, height: 120 });
+
+    // Иначе TextView меряет строку и возвращает рамку назад — ручки
+    // выглядят сломанными: тянешь за край, отпускаешь, ничего не изменилось.
+    expect(nodeAt(text.id)).toMatchObject({ width: 400, height: 120, autoWidth: false });
   });
 
   it('несуществующий узел — не исключение', () => {

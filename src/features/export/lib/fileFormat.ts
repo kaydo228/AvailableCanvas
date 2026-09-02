@@ -28,7 +28,11 @@ const textStyle = z.object({
   align: z.enum(['left', 'center', 'right']),
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
   lineHeight: z.number().optional(),
+  letterSpacing: z.number().optional(),
+  background: z.string().optional(),
+  font: z.enum(['sans', 'serif', 'mono']).optional(),
 });
 
 const box = {
@@ -49,7 +53,12 @@ const endpoint = z.object({
   point: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
-const node = z.discriminatedUnion('type', [
+/**
+ * Схема одного узла. Экспортируется ради буфера обмена: текст из системного
+ * буфера — такая же граница доверия, как файл, и проверять его надо той же
+ * схемой, а не второй, собранной рядом.
+ */
+export const nodeSchema = z.discriminatedUnion('type', [
   z.object({
     ...box,
     type: z.literal('shape'),
@@ -111,7 +120,7 @@ const node = z.discriminatedUnion('type', [
 const documentSchema = z.object({
   projectId: z.string(),
   schemaVersion: z.literal(DOCUMENT_VERSION),
-  nodes: z.record(z.string(), node),
+  nodes: z.record(z.string(), nodeSchema),
   order: z.array(z.string()),
   viewport: z.object({ x: z.number(), y: z.number(), zoom: z.number() }),
   background: z.object({

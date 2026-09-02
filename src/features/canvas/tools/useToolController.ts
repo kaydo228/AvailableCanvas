@@ -10,13 +10,14 @@ import { useCallback, useRef, useState } from 'react';
 
 import type { Rect, WorldPoint } from '@/features/canvas/engine/contract';
 import { toWorld } from '@/features/canvas/engine/viewport';
+import { themeInk } from '@/features/canvas/nodes/textStyle';
 import { normalizeRect } from '@/features/canvas/tools/geometry';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 
 import { shapeFromDrag } from './shapeTool';
 import { stickyFromDrag } from './stickyTool';
-import { textFromDrag } from './textTool';
+import { DEFAULT_TEXT_COLOR, textFromDrag } from './textTool';
 
 /** Инструменты, которые создают узлы. Остальные жест не перехватывают. */
 const CREATING = new Set(['rect', 'ellipse', 'diamond', 'hexagon', 'heptagon', 'text', 'sticky']);
@@ -63,7 +64,9 @@ export function useToolController() {
         case 'heptagon':
           return shapeFromDrag(from, to, 'heptagon', shiftKey, zoom);
         case 'text':
-          return textFromDrag(from, to, zoom);
+          // Цвет берём из темы, а не из константы инструмента: на тёмной доске
+          // почти чёрный текст не виден вовсе.
+          return textFromDrag(from, to, zoom, themeInk(DEFAULT_TEXT_COLOR));
         case 'sticky':
           return stickyFromDrag(from, to, shiftKey, zoom);
         default:
