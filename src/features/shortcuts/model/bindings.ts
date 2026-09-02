@@ -143,8 +143,12 @@ export const SHORTCUTS: readonly Shortcut[] = [
     group: 'Правка',
     run: (actions) => actions.redo(),
   },
-  { keys: '$mod+KeyC', hint: '$mod+C', title: 'Копировать', group: 'Правка' },
-  { keys: '$mod+KeyV', hint: '$mod+V', title: 'Вставить', group: 'Правка' },
+  // Буфер обмена перехватывается не здесь, а событиями `copy` и `paste`
+  // (useClipboard): нажатие клавиш перехватывать нельзя — до `paste` тогда
+  // не доходит ни наш JSON, ни картинка из системного буфера. Поэтому
+  // `keys` пуст: строки живут ради справки, обработчика в таблице нет.
+  { keys: '', hint: '$mod+C', title: 'Копировать', group: 'Правка' },
+  { keys: '', hint: '$mod+V', title: 'Вставить', group: 'Правка' },
   {
     keys: '$mod+KeyD',
     hint: '$mod+D',

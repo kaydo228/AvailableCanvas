@@ -176,6 +176,38 @@ export function withGroupDescendants(document: BoardDocument, ids: Iterable<Id>)
   return result;
 }
 
+/**
+ * Что уезжает в копию вместе с выделением: сами узлы, содержимое их групп
+ * и линии, у которых скопированы ОБА конца.
+ *
+ * Линия с одним скопированным концом не берётся намеренно: её копия всё
+ * равно отвязалась бы в точку (см. `duplicateNode`), и на доске появлялся бы
+ * висящий в пустоте хвост.
+ *
+ * Одна функция на дублирование и на буфер обмена: разъедутся — Cmd+D и
+ * Cmd+C начнут копировать разное, и объяснить это пользователю будет нечем.
+ */
+export function nodesToCopy(document: BoardDocument, ids: Iterable<Id>): Id[] {
+  const result = withGroupDescendants(document, ids).filter((id) => document.nodes[id]);
+  const taken = new Set(result);
+
+  for (const node of Object.values(document.nodes)) {
+    if (
+      node.type === 'connector' &&
+      !taken.has(node.id) &&
+      node.from.nodeId !== undefined &&
+      node.to.nodeId !== undefined &&
+      taken.has(node.from.nodeId) &&
+      taken.has(node.to.nodeId)
+    ) {
+      result.push(node.id);
+      taken.add(node.id);
+    }
+  }
+
+  return result;
+}
+
 /** Есть ли среди реального содержимого группы повёрнутый узел. */
 export function groupHasRotatedDescendant(document: BoardDocument, groupId: Id): boolean {
   const group = document.nodes[groupId];

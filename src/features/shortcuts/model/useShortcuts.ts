@@ -19,8 +19,13 @@ import { useBoardStore } from '@/shared/store/board';
 import { isTyping, isTypingTarget } from '../lib/typing';
 import { activeShortcuts, type ShortcutActions } from './bindings';
 import { useShortcutsUI } from './store';
+import { useClipboard } from './useClipboard';
 
 export const useShortcuts = (): void => {
+  // Копирование и вставка — соседний хук: они висят на событиях `copy`
+  // и `paste`, а не на клавишах, и в таблицу tinykeys не помещаются.
+  useClipboard();
+
   useEffect(() => {
     const board = useBoardStore;
 

@@ -159,7 +159,12 @@ test('«?» открывает и закрывает справку', async ({ p
   // Ищем внутри модалки: «Ромб» есть ещё и кнопкой в панели инструментов.
   await expect(dialog.getByText('Ромб')).toBeVisible();
   await expect(dialog.getByText('Отменить')).toBeVisible();
-  await expect(dialog.getByText('пока не готово').first()).toBeVisible();
+  // Пометки «пока не готово» в справке больше нет: последними
+  // нереализованными оставались «Копировать» и «Вставить», и они сделаны
+  // (см. e2e/clipboard.spec.ts). Строки при этом остались — обработчик у них
+  // не в таблице клавиш, а на событиях copy/paste.
+  await expect(dialog.getByText('Копировать')).toBeVisible();
+  await expect(dialog.getByText('пока не готово')).toHaveCount(0);
 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -190,7 +195,7 @@ test('Cmd+1 и Cmd+0 меняют вид', async ({ page }) => {
   expect(fitted).not.toBe(reset);
 });
 
-test('клавиши правки: реализованные работают, нереализованные безобидны', async ({ page }) => {
+test('клавиши правки: дублирование, слои, группы, буфер обмена', async ({ page }) => {
   await openBoard(page);
   await page.evaluate(() => window.__board.getState().select(['s1']));
 
@@ -218,13 +223,13 @@ test('клавиши правки: реализованные работают, 
   await page.keyboard.press('ControlOrMeta+g');
   expect((await state(page)).nodeCount, 'группа из одного узла не собирается').toBe(3);
 
-  // Cmd+C и Cmd+V действия в сторе не имеют: в таблице клавиш они есть,
-  // но `run` у них нет. Нажатие обязано быть безобидным, а не ронять доску.
+  // Cmd+C и Cmd+V кладут копию выделенного: перехватываются не таблицей
+  // клавиш, а событиями copy/paste — подробности в e2e/clipboard.spec.ts.
   await page.keyboard.press('ControlOrMeta+c');
   await page.keyboard.press('ControlOrMeta+v');
 
   expect(errors, 'нажатия не должны бросать').toEqual([]);
-  expect((await state(page)).nodeCount, 'копирование пока ничего не делает').toBe(3);
+  expect((await state(page)).nodeCount, 'вставка добавляет копию').toBe(4);
 });
 
 test('Cmd+Z отменяет действие, Shift+Cmd+Z возвращает (FR-10)', async ({ page }) => {
