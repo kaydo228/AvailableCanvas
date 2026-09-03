@@ -9,17 +9,19 @@
 import { type DBSchema, type IDBPDatabase, openDB } from 'idb';
 
 import type { BoardDocument, Id, Project } from '@/shared/types/document';
+import type { SyncState } from './syncStore';
 
 export interface ProstorDB extends DBSchema {
   projects: { key: Id; value: Project; indexes: { updatedAt: number } };
   documents: { key: Id; value: BoardDocument };
   blobs: { key: Id; value: { blobId: Id; blob: Blob } };
+  sync: { key: Id; value: SyncState };
 }
 
 const DB_NAME = 'prostor';
 
-/** 1 — проекты и документы. 2 — картинки (FR-06). */
-const DB_VERSION = 2;
+/** 1 — проекты и документы. 2 — картинки (FR-06). 3 — метаданные синхронизации. */
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<ProstorDB>> | null = null;
 
@@ -34,6 +36,9 @@ const open = (): Promise<IDBPDatabase<ProstorDB>> => {
       }
       if (oldVersion < 2) {
         db.createObjectStore('blobs', { keyPath: 'blobId' });
+      }
+      if (oldVersion < 3) {
+        db.createObjectStore('sync', { keyPath: 'projectId' });
       }
     },
 
