@@ -30,18 +30,30 @@ export const collectBlobIds = (document: BoardDocument): Id[] => {
   return found;
 };
 
-export const uploadImages = async (document: BoardDocument, owner: string): Promise<void> => {
+/**
+ * Возвращает `true`, только если все нужные файлы гарантированно лежат на
+ * сервере. `pushProject` кладёт строку доски лишь при `true` — иначе на
+ * сервере окажется документ со ссылкой на файл, которого там нет, а на
+ * другом устройстве это откроется дырой вместо картинки, и само не починится.
+ */
+export const uploadImages = async (document: BoardDocument, owner: string): Promise<boolean> => {
   const cloud = getCloud();
-  if (!cloud) return;
+  if (!cloud) return true;
 
   for (const blobId of collectBlobIds(document)) {
     const blob = await getBlob(blobId);
     if (!blob) continue;
 
     // upsert: false — файл неизменяемый, второй раз его заливать незачем.
-    // «Уже есть» здесь не ошибка, а нормальный исход повторной выгрузки.
-    await cloud.storage.from(BUCKET).upload(`${owner}/${blobId}`, blob, { upsert: false });
+    const { error } = await cloud.storage.from(BUCKET).upload(`${owner}/${blobId}`, blob, {
+      upsert: false,
+    });
+    // «Уже есть» — код 409, нормальный исход повторной выгрузки, не ошибка.
+    // Проверяем код, а не текст сообщения: текст меняется между версиями API.
+    if (error && error.statusCode !== '409') return false;
   }
+
+  return true;
 };
 
 export const downloadImage = async (blobId: Id, owner: string): Promise<Blob | undefined> => {

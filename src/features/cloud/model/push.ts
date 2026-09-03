@@ -56,10 +56,15 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
   ]);
   if (!project || !document) return false;
 
-  await uploadImages(document, owner);
-
-  const row = toRow(project, document, owner, state?.isPublic ?? false);
-  const { error } = await cloud.from('projects').upsert(row);
+  // Картинки — первыми: при настоящей (не 409) ошибке выгрузки строку доски
+  // не пишем вовсе, иначе на сервере окажется документ со ссылкой на файл,
+  // которого там нет — на другом устройстве это откроется дырой вместо
+  // картинки, и само не починится. Дальше это та же ветка `error`, что и
+  // отказ `upsert`: остаётся прежний `remoteUpdatedAt`, ставится `dirty`.
+  const imagesUploaded = await uploadImages(document, owner);
+  const { error } = imagesUploaded
+    ? await cloud.from('projects').upsert(toRow(project, document, owner, state?.isPublic ?? false))
+    : { error: new Error('картинки доски не выгрузились') };
 
   // `writeSyncState` — это `put`, полная перезапись: при ошибке нельзя молча
   // выбросить remoteUpdatedAt, иначе доска, которая уже уезжала на сервер,

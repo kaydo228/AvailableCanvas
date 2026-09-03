@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Ленивое скачивание картинок (задача 6 плана cloud-sync). Сети нет — клиент
- * подменяется заглушкой: `storage.from('images').download` отдаёт маленький
- * PNG и считает свои пути в `window.__downloads`.
+ * Ленивое скачивание картинок и выгрузка перед строкой доски (задача 6 плана
+ * cloud-sync, раунд правок 1). Сети нет — клиент подменяется заглушкой:
+ * `storage.from('images').download` отдаёт маленький PNG и считает свои пути
+ * в `window.__downloads`; `storage.from('images').upload` управляется опцией
+ * `uploadError` — так проверяются оба исхода настоящей ошибки выгрузки картинки.
  *
  * Подмену ставим через `addInitScript`, а не `page.evaluate` после навигации —
  * как и в остальных `cloud-*.spec.ts`: `main.tsx` зовёт `initSession()`
@@ -19,13 +21,20 @@ import { expect, test } from '@playwright/test';
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-const stubCloudClient = (png: string) => {
+interface StubOptions {
+  png: string;
+  /** Что вернуть на `storage.upload`. Без опции — успех. */
+  uploadError?: { statusCode: string; message: string };
+}
+
+const stubCloudClient = ({ png, uploadError }: StubOptions) => {
   const user = { id: 'user-1', email: 'test@example.com' };
   type FakeSession = { user: typeof user };
   let session: FakeSession | null = null;
   let onChange: ((event: string, session: FakeSession | null) => void) | null = null;
 
   window.__downloads = [];
+  window.__upserts = [];
 
   const toBlob = (base64: string): Blob => {
     const binary = atob(base64);
@@ -54,7 +63,10 @@ const stubCloudClient = (png: string) => {
       },
     },
     from: (_table: string) => ({
-      upsert: async () => ({ error: null }),
+      upsert: async (row: Window['__upserts'][number]) => {
+        window.__upserts.push(row);
+        return { error: null };
+      },
       select: (_columns: string) => ({
         eq: async () => ({ data: [], error: null }),
       }),
@@ -62,7 +74,7 @@ const stubCloudClient = (png: string) => {
     }),
     storage: {
       from: (_bucket: string) => ({
-        upload: async () => ({ error: null }),
+        upload: async () => (uploadError ? { error: uploadError } : { error: null }),
         download: async (path: string) => {
           window.__downloads.push(path);
           return { data: toBlob(png), error: null };
@@ -81,6 +93,19 @@ const stubCloudClient = (png: string) => {
     },
   });
 };
+
+/** Читает строку `sync` напрямую из IndexedDB — как в e2e/cloud-push.spec.ts. */
+const readSyncState = (page: import('@playwright/test').Page, projectId: string) =>
+  page.evaluate(async (id) => {
+    const request = indexedDB.open('prostor');
+    const db: IDBDatabase = await new Promise((resolve) => {
+      request.onsuccess = () => resolve(request.result);
+    });
+    return new Promise((resolve) => {
+      const query = db.transaction('sync').objectStore('sync').get(id);
+      query.onsuccess = () => resolve(query.result);
+    });
+  }, projectId);
 
 const signIn = async (page: import('@playwright/test').Page) => {
   const header = page.locator('header');
@@ -120,6 +145,45 @@ const addRemoteImage = (page: import('@playwright/test').Page, blobId: string) =
     });
   }, blobId);
 
+/**
+ * Картинка, реально положенная в локальный blobStore (через `putImage`, как
+ * при вставке файла пользователем) — именно такую `uploadImages` пытается
+ * выгрузить. Узел со «серверным» blobId из `addRemoteImage` для этого не
+ * годится: `getBlob` на него не находит файл локально и выгрузка молча
+ * пропускает его, не вызывая `storage.upload` вовсе.
+ */
+const addLocalImage = (page: import('@playwright/test').Page) =>
+  page.evaluate(async () => {
+    const { putImage } = await import('/src/features/persistence/blobStore.ts');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 2;
+    canvas.getContext('2d')?.fillRect(0, 0, 2, 2);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => (result ? resolve(result) : reject(new Error('toBlob вернул null'))),
+        'image/png',
+      );
+    });
+    const stored = await putImage(blob);
+
+    window.__board.getState().addNode({
+      id: 'img-local',
+      type: 'image',
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 80,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      blobId: stored.blobId,
+      naturalWidth: stored.naturalWidth,
+      naturalHeight: stored.naturalHeight,
+    });
+  });
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => indexedDB.deleteDatabase('prostor'));
@@ -129,7 +193,7 @@ test.beforeEach(async ({ page }) => {
 test('картинка без локального файла скачивается один раз по owner/blobId, а второй раз в сеть не идёт', async ({
   page,
 }) => {
-  await page.addInitScript(stubCloudClient, PNG_BASE64);
+  await page.addInitScript(stubCloudClient, { png: PNG_BASE64 });
   await page.goto('/');
 
   await signIn(page);
@@ -151,4 +215,53 @@ test('картинка без локального файла скачивает
   // второе открытие обслуживается локально, download больше не зовётся.
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => window.__downloads.length)).toBe(1);
+});
+
+test('настоящая ошибка выгрузки картинки не даёт уйти строке доски, sync помечен dirty', async ({
+  page,
+}) => {
+  await page.addInitScript(stubCloudClient, {
+    png: PNG_BASE64,
+    uploadError: { statusCode: '400', message: 'quota exceeded' },
+  });
+  await page.goto('/');
+
+  await signIn(page);
+  const projectId = await createProject(page, 'Доска, которая не выгрузится');
+  await addLocalImage(page);
+
+  // expect.poll вместо фиксированного waitForTimeout: этот файл делит воркеры
+  // с cloud-push.spec.ts (два тяжёлых теста на холсте разом), и под нагрузкой
+  // 500 мс автосохранения + 3000 мс дебаунса не всегда укладываются день в день —
+  // poll ждёт ровно столько, сколько нужно, а не гадает с запасом.
+  await expect
+    .poll(
+      async () =>
+        ((await readSyncState(page, projectId)) as { dirty?: boolean } | undefined)?.dirty,
+      { timeout: 8000 },
+    )
+    .toBe(true);
+
+  // Строка доски не должна была уйти вовсе: иначе на сервере лежал бы документ
+  // со ссылкой на файл, которого там нет.
+  expect(await page.evaluate(() => window.__upserts.length)).toBe(0);
+});
+
+test('ошибка 409 («уже есть») выгрузку не ломает — строка доски уходит, dirty не ставится', async ({
+  page,
+}) => {
+  await page.addInitScript(stubCloudClient, {
+    png: PNG_BASE64,
+    uploadError: { statusCode: '409', message: 'Duplicate' },
+  });
+  await page.goto('/');
+
+  await signIn(page);
+  const projectId = await createProject(page, 'Доска с уже выгруженной картинкой');
+  await addLocalImage(page);
+
+  await expect.poll(() => page.evaluate(() => window.__upserts.length), { timeout: 8000 }).toBe(1);
+
+  const state = (await readSyncState(page, projectId)) as { dirty: boolean } | undefined;
+  expect(state?.dirty).toBe(false);
 });
