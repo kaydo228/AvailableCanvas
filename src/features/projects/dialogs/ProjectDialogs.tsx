@@ -22,6 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
+import { deleteRemote, useSession } from '@/features/cloud';
 import {
   createProject,
   deleteProject,
@@ -308,6 +309,10 @@ function DeleteDialog({ projectId }: { projectId: Id }) {
                   event.preventDefault();
                   run(async () => {
                     await deleteProject(projectId);
+                    // Удалённую строку сносим только за вошедшим: без owner
+                    // на сервере нечего искать — доска туда и не уезжала.
+                    const owner = useSession.getState().userId;
+                    if (owner) await deleteRemote(projectId);
                     bumpRevision();
                     close();
                   });

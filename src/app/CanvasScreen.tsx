@@ -12,6 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
+import { useCloudSync } from '@/features/cloud';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
@@ -49,6 +50,10 @@ export function CanvasScreen() {
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
   useAutosave();
+
+  // Выгрузка на сервер (задача 4 cloud-sync). Свой дебаунс 3000 мс поверх
+  // уже сохранённого документа — не привязан к автосохранению.
+  useCloudSync(projectId);
 
   // История отмен (FR-10). Своя у каждого проекта, чистится на входе и выходе.
   useHistorySession();

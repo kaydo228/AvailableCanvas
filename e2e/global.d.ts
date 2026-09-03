@@ -10,5 +10,7 @@ declare global {
     __zPrevented: boolean | null;
     /** Подмена клиента Supabase из тестов. Ставится в DEV, см. cloud/model/client.ts. */
     __cloud: { setCloud: (client: unknown) => void };
+    /** Буфер вызовов `upsert` в e2e/cloud-push.spec.ts. */
+    __upserts: Array<{ id: string; document: { nodes: Record<string, unknown> } }>;
   }
 }

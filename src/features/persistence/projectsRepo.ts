@@ -15,6 +15,7 @@ import type { BoardDocument, Id, Project } from '@/shared/types/document';
 import { sweepBlobs } from './blobStore';
 import { getDB as db } from './db';
 import { publish } from './sync';
+import { forgetSyncState } from './syncStore';
 
 /**
  * Предел длины имени проекта.
@@ -155,6 +156,9 @@ export const deleteProject = async (id: Id): Promise<void> => {
     tx.done,
   ]);
   await sweepBlobs();
+  // Метаданные синхронизации — тоже локальное состояние проекта: без этого
+  // они переживают удаление и выдают себя за доску, которая когда-то была.
+  await forgetSyncState(id);
   publish({ kind: 'deleted', projectId: id });
 };
 
