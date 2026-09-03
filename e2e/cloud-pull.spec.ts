@@ -1,17 +1,17 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Скачивание досок и применение решений слияния (задача 5 плана cloud-sync).
- * Сети нет — клиент подменяется заглушкой с фиксированным списком строк на
- * сервере: `select(...).eq('owner', ...)` обслуживает `remoteList`,
- * `select('*').eq('id', ...).single()` — `pullProject`.
+ * Скачивание досок и применение решений слияния (задача 5 плана cloud-sync),
+ * плюс правка раунда 1: круг синхронизации при входе (`useCloudSyncOnLogin`)
+ * живёт на уровне приложения (`Router`), а не на экране холста. Кнопка
+ * «Войти» стоит в шапке списка проектов — там хука на холсте нет, и до этой
+ * правки человек, вошедший на новом устройстве, видел пустой список, пока
+ * не откроет хоть одну доску вручную.
  *
- * `syncNow` вызывается из `useCloudSync`, а этот хук живёт только на экране
- * холста (см. комментарий в useCloudSync.ts) — кнопка «Войти» стоит в шапке
- * списка проектов, где хука нет. Поэтому в обоих сценариях между входом и
- * проверкой списка тест заходит на любую доску: одного захода достаточно,
- * чтобы прогнать круг синхронизации для всех досок владельца разом,
- * не только текущей.
+ * Сети нет — клиент подменяется заглушкой с фиксированным списком строк на
+ * сервере: `select(...).eq('owner', ...)` обслуживает `remoteList` (и заодно
+ * считает свои вызовы в `window.__syncCalls` — один вызов на один круг
+ * `syncNow`), `select('*').eq('id', ...).single()` — `pullProject`.
  */
 
 interface Row {
@@ -30,6 +30,8 @@ const stubCloudClient = (rows: Row[]) => {
   type FakeSession = { user: typeof user };
   let session: FakeSession | null = null;
   let onChange: ((event: string, session: FakeSession | null) => void) | null = null;
+
+  window.__syncCalls = 0;
 
   const client = {
     auth: {
@@ -54,7 +56,9 @@ const stubCloudClient = (rows: Row[]) => {
       select: (_columns: string) => ({
         eq: (column: string, value: string) => {
           // remoteList: select('id, updated_at').eq('owner', owner) — без .single(), сразу thenable.
+          // Вызывается ровно раз на каждый syncNow — считаем как счётчик кругов синхронизации.
           if (column === 'owner') {
+            window.__syncCalls += 1;
             const data = rows
               .filter((row) => row.owner === value)
               .map((row) => ({ id: row.id, updated_at: row.updated_at }));
@@ -95,6 +99,10 @@ const signIn = async (page: import('@playwright/test').Page) => {
   await expect(dialog).toBeHidden();
 };
 
+const signOut = async (page: import('@playwright/test').Page) => {
+  await page.locator('header').getByRole('button', { name: 'Выйти' }).click();
+};
+
 const createProject = async (page: import('@playwright/test').Page, name: string) => {
   await page.getByRole('button', { name: 'Создать проект' }).last().click();
   await page.getByLabel('Имя проекта').fill(name);
@@ -108,19 +116,6 @@ const goBackToList = async (page: import('@playwright/test').Page) => {
   await page.getByRole('link', { name: 'Назад к списку' }).click();
   await expect(page).toHaveURL('/');
 };
-
-/** Читает строку проекта напрямую из IndexedDB — тот же приём, что и в e2e/cloud-push.spec.ts. */
-const readProject = (page: import('@playwright/test').Page, id: string) =>
-  page.evaluate(async (projectId) => {
-    const request = indexedDB.open('prostor');
-    const db: IDBDatabase = await new Promise((resolve) => {
-      request.onsuccess = () => resolve(request.result);
-    });
-    return new Promise((resolve) => {
-      const query = db.transaction('projects').objectStore('projects').get(projectId);
-      query.onsuccess = () => resolve(query.result);
-    });
-  }, id);
 
 /** Пишет запись `sync` напрямую в IndexedDB — готовит «доска уже синхронизировалась раньше». */
 const writeSyncState = (
@@ -145,7 +140,9 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('доска, пришедшая с сервера, появляется в списке и открывается с узлами', async ({ page }) => {
+test('доска появляется в списке сразу после входа, без захода на холст, и открывается с узлами', async ({
+  page,
+}) => {
   const remoteDocument = {
     projectId: 'remote-1',
     schemaVersion: 1,
@@ -185,19 +182,11 @@ test('доска, пришедшая с сервера, появляется в 
   ]);
   await page.goto('/');
 
-  // Локальная доска нужна только затем, чтобы было куда зайти и запустить
-  // круг синхронизации — сам вход в аккаунт со списка его не запускает.
-  await createProject(page, 'Локальная доска');
-  await goBackToList(page);
-
   await signIn(page);
 
-  await page.getByText('Локальная доска').click();
-  await expect(page).toHaveURL(/\/p\/[\w-]+$/);
-
-  await expect.poll(() => readProject(page, 'remote-1')).toBeTruthy();
-
-  await goBackToList(page);
+  // Круг синхронизации обязан завестись самим входом — без захода на
+  // какую-либо доску: кнопка «Войти» стоит на экране списка, и человек,
+  // вошедший на новом устройстве, не должен видеть пустой список.
   await expect(page.getByText('Облачная доска')).toBeVisible();
 
   await page.getByText('Облачная доска').click();
@@ -229,13 +218,28 @@ test('доска, исчезнувшая с сервера, пропадает �
 
   await signIn(page);
 
-  // Заводим круг синхронизации второй, независимой доской — саму «Была на
-  // сервере» не открываем, чтобы не путать удаление с закрытием её же холста.
-  await createProject(page, 'Заводит синхронизацию');
-
-  await expect.poll(() => readProject(page, projectId)).toBeFalsy();
-
-  await goBackToList(page);
   await expect(page.getByText('Была на сервере')).toHaveCount(0);
-  await expect(page.getByText('Заводит синхронизацию')).toBeVisible();
+});
+
+test('на вход уходит ровно один круг синхронизации, а выход и повторный вход — ещё один', async ({
+  page,
+}) => {
+  await page.addInitScript(stubCloudClient, []);
+  await page.goto('/');
+
+  await signIn(page);
+  await expect.poll(() => page.evaluate(() => window.__syncCalls)).toBe(1);
+
+  // Заход на доску после входа не должен добавить второй круг: выгрузка
+  // (`useCloudSync`, экран холста) и вход (`useCloudSyncOnLogin`, приложение)
+  // — теперь два разных хука, и открытие холста не должно повторно дёрнуть syncNow.
+  await createProject(page, 'Не удваивает круг');
+  await goBackToList(page);
+  expect(await page.evaluate(() => window.__syncCalls)).toBe(1);
+
+  // Выход и повторный вход тем же человеком обязаны завести НОВЫЙ круг —
+  // без сброса `syncedFor` на logout повторный вход не работал бы никогда.
+  await signOut(page);
+  await signIn(page);
+  await expect.poll(() => page.evaluate(() => window.__syncCalls)).toBe(2);
 });

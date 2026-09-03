@@ -7,6 +7,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { ProjectsHeader } from '@/app/ProjectsHeader';
+import { useCloudSyncOnLogin } from '@/features/cloud';
 import { ProjectDialogs } from '@/features/projects/dialogs/ProjectDialogs';
 import { ProjectsScreen } from '@/features/projects/ProjectsScreen';
 import { AppToaster } from '@/shared/ui';
@@ -37,6 +38,11 @@ function ProjectsRoute() {
 }
 
 export function Router() {
+  // Круг синхронизации при входе — здесь, а не на экране холста: кнопка
+  // «Войти» стоит на списке проектов, и человек обязан увидеть свои доски,
+  // не открывая ни одной вручную. Хук смонтирован на всех маршрутах разом.
+  useCloudSyncOnLogin();
+
   return (
     <BrowserRouter>
       {/*

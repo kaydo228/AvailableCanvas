@@ -14,5 +14,7 @@ declare global {
     __upserts: Array<{ id: string; document: { nodes: Record<string, unknown> } }>;
     /** Переключатель отказа `upsert` в заглушке e2e/cloud-push.spec.ts — меняется прямо из теста. */
     __failUpsert: boolean;
+    /** Счётчик кругов `syncNow` в заглушке e2e/cloud-pull.spec.ts — растёт на каждый remoteList. */
+    __syncCalls: number;
   }
 }
