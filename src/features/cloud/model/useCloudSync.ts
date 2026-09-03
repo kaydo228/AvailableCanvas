@@ -8,12 +8,20 @@
  * везти на сервер.
  *
  * Без входа хук ничего не делает: `pushProject` требует владельца.
+ *
+ * Отдельно от выгрузки — круг слияния при входе (`syncNow`): появился
+ * `userId`, значит стоит сверить локальный список досок со списком на
+ * сервере. `syncedFor` держит того, для кого круг уже запущен, и не пускает
+ * второй: React 18 StrictMode в dev нарочно вызывает эффект без cleanup дважды
+ * подряд на одном и том же значении зависимости, а повторный вход тем же
+ * пользователем не должен второй раз пробегать по всем доскам.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSaveStatus } from '@/features/persistence/autosave';
 import type { Id } from '@/shared/types/document';
 
+import { syncNow } from './pull';
 import { pushProject } from './push';
 import { useSession } from './session';
 
@@ -22,6 +30,13 @@ export const CLOUD_PUSH_DELAY_MS = 3000;
 
 export const useCloudSync = (projectId: Id | undefined): void => {
   const userId = useSession((s) => s.userId);
+
+  const syncedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId || syncedFor.current === userId) return;
+    syncedFor.current = userId;
+    void syncNow(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (!projectId || !userId) return;

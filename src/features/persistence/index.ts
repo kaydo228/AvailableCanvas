@@ -22,6 +22,7 @@ export {
   isBlankName,
   listProjects,
   MAX_PROJECT_NAME,
+  overwriteProject,
   renameProject,
   type SaveOutcome,
   saveDocument,

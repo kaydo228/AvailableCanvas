@@ -162,6 +162,27 @@ export const deleteProject = async (id: Id): Promise<void> => {
   publish({ kind: 'deleted', projectId: id });
 };
 
+/**
+ * Запись проекта и документа как есть — для того, что пришло с сервера.
+ *
+ * `updatedAt` НЕ сдвигается и проверка сессии вкладки не делается: это не
+ * правка пользователя, а другая версия той же доски. Подвинуть время здесь —
+ * значит на следующем круге синхронизации выгрузить её обратно и зациклиться.
+ */
+export const overwriteProject = async (
+  project: Project,
+  document: BoardDocument,
+): Promise<void> => {
+  const database = await db();
+  const tx = database.transaction(['projects', 'documents'], 'readwrite');
+  await Promise.all([
+    tx.objectStore('projects').put(project),
+    tx.objectStore('documents').put(document),
+    tx.done,
+  ]);
+  publish({ kind: 'projects-changed' });
+};
+
 export type SaveOutcome =
   | { ok: true; updatedAt: number }
   /** Проект удалён — писать документ некуда, он остался бы сиротой. */
