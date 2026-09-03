@@ -74,6 +74,17 @@ describe('decide', () => {
     expect(out).toEqual([{ kind: 'nothing', projectId: 'a' }]);
   });
 
+  it('доска другого пользователя локально И на сервере — только nothing, не pull', () => {
+    // Критично: если чужую доску молча не трогаем, но она есть на сервере,
+    // второй цикл не должен добавить pull. Иначе получатся два решения на один id.
+    const out = decide(
+      [local('a', 100, { owner: 'user-2', remoteUpdatedAt: 100 })],
+      [{ id: 'a', updatedAt: 100 }],
+      ME,
+    );
+    expect(out).toEqual([{ kind: 'nothing', projectId: 'a' }]);
+  });
+
   it('есть на сервере, нет локально — скачиваем', () => {
     expect(decide([], [{ id: 'b', updatedAt: 500 }], ME)).toEqual([
       { kind: 'pull', projectId: 'b' },

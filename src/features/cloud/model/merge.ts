@@ -33,8 +33,11 @@ export function decide(local: LocalBoard[], remote: RemoteBoard[], owner: string
   for (const board of local) {
     const { projectId, state } = board;
     const mine = state?.owner === undefined || state.owner === owner;
-    // Доска другого пользователя на этом же устройстве — не наша забота.
+    // Доска другого пользователя на этом же устройстве — не трогаем целиком.
+    // Удаляем из remoteById, чтобы второй цикл не добавил pull для того же id:
+    // безопаснее не синхронизировать, чем молча перезаписать чужую доску.
     if (!mine) {
+      remoteById.delete(projectId);
       decisions.push({ kind: 'nothing', projectId });
       continue;
     }
