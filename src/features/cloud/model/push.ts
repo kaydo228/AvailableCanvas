@@ -58,10 +58,16 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
   const row = toRow(project, document, owner, state?.isPublic ?? false);
   const { error } = await cloud.from('projects').upsert(row);
 
+  // `writeSyncState` — это `put`, полная перезапись: при ошибке нельзя молча
+  // выбросить remoteUpdatedAt, иначе доска, которая уже уезжала на сервер,
+  // после первого же обрыва сети станет неотличима от той, что не уезжала
+  // никогда. `exactOptionalPropertyTypes` не даёт положить туда `undefined`
+  // явно — если доска ни разу не доехала, ключ просто не пишем.
+  const remoteUpdatedAt = error ? state?.remoteUpdatedAt : project.updatedAt;
   await writeSyncState({
     projectId,
     owner,
-    ...(error ? {} : { remoteUpdatedAt: project.updatedAt }),
+    ...(remoteUpdatedAt !== undefined ? { remoteUpdatedAt } : {}),
     dirty: Boolean(error),
     isPublic: state?.isPublic ?? false,
   });

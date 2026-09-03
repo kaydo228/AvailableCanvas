@@ -31,7 +31,13 @@ export const useCloudSync = (projectId: Id | undefined): void => {
     const unsubscribe = useSaveStatus.subscribe((state, previous) => {
       if (state.status !== 'saved' || previous.status === 'saved') return;
       clearTimeout(timer);
-      timer = setTimeout(() => void pushProject(projectId, userId), CLOUD_PUSH_DELAY_MS);
+      timer = setTimeout(() => {
+        // Обнуляем до вызова: иначе cleanup ниже не отличит «таймер уже
+        // сработал» от «ещё висит» и после каждой ушедшей выгрузки будет
+        // слать лишнюю при любом следующем уходе с холста.
+        timer = undefined;
+        void pushProject(projectId, userId);
+      }, CLOUD_PUSH_DELAY_MS);
     });
 
     return () => {

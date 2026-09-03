@@ -16,6 +16,10 @@ const stubCloudClient = (opts: { failUpsert: boolean }) => {
   let onChange: ((event: string, session: FakeSession | null) => void) | null = null;
 
   window.__upserts = [];
+  // Читается на каждый вызов, а не один раз при создании клиента: тест на
+  // Important 2 должен переключить отказ сети посреди сценария, между двумя
+  // выгрузками одной и той же доски.
+  window.__failUpsert = opts.failUpsert;
 
   const client = {
     auth: {
@@ -39,7 +43,7 @@ const stubCloudClient = (opts: { failUpsert: boolean }) => {
     from: (_table: string) => ({
       upsert: async (row: Window['__upserts'][number]) => {
         window.__upserts.push(row);
-        return opts.failUpsert ? { error: { message: 'сеть недоступна' } } : { error: null };
+        return window.__failUpsert ? { error: { message: 'сеть недоступна' } } : { error: null };
       },
       delete: () => ({ eq: async () => ({ error: null }) }),
     }),
@@ -150,4 +154,68 @@ test('отказ сети не портит доску — узел на мес�
 
   const state = (await readSyncState(page, projectId)) as { dirty: boolean } | undefined;
   expect(state?.dirty).toBe(true);
+});
+
+test('после успешной выгрузки обрыв сети не стирает remoteUpdatedAt (Important 2)', async ({
+  page,
+}) => {
+  await page.addInitScript(stubCloudClient, { failUpsert: false });
+  await page.goto('/');
+
+  await signIn(page);
+  const projectId = await createProject(page, 'Сначала успех, потом обрыв');
+
+  await addShape(page, 'shape-3');
+  await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+  await page.waitForTimeout(3500);
+
+  const afterSuccess = (await readSyncState(page, projectId)) as
+    | { dirty: boolean; remoteUpdatedAt?: number }
+    | undefined;
+  expect(afterSuccess?.dirty).toBe(false);
+  expect(afterSuccess?.remoteUpdatedAt).toBeDefined();
+
+  // Сеть отваливается перед следующей правкой той же доски.
+  await page.evaluate(() => {
+    window.__failUpsert = true;
+  });
+  await addShape(page, 'shape-4');
+  await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+  await page.waitForTimeout(3500);
+
+  const afterFailure = (await readSyncState(page, projectId)) as
+    | { dirty: boolean; remoteUpdatedAt?: number }
+    | undefined;
+  expect(afterFailure?.dirty).toBe(true);
+  // `put` — это полная перезапись строки: без починки `remoteUpdatedAt`
+  // пропадал бы вовсе, и доска, которая уже уезжала на сервер, становилась
+  // неотличима от той, что не уезжала никогда.
+  expect(afterFailure?.remoteUpdatedAt).toBe(afterSuccess?.remoteUpdatedAt);
+});
+
+test('после уже отправленной выгрузки уход с холста не шлёт лишний upsert (Important 1)', async ({
+  page,
+}) => {
+  await page.addInitScript(stubCloudClient, { failUpsert: false });
+  await page.goto('/');
+
+  await signIn(page);
+  await createProject(page, 'Без лишней выгрузки на выходе');
+
+  await addShape(page, 'shape-5');
+  await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+
+  // Дожидаемся, пока таймер дебаунса сработает сам — выгрузка уже ушла.
+  await page.waitForTimeout(3500);
+  expect(await page.evaluate(() => window.__upserts.length)).toBe(1);
+
+  // Уход с холста ПОСЛЕ того, как таймер уже отработал: cleanup не должен
+  // принять сработавший таймер за ещё не отправленную выгрузку и продублировать её.
+  await page.getByRole('link', { name: 'Назад к списку' }).click();
+  await expect(page).toHaveURL('/');
+  // pushProject в cleanup не ждут (`void`) — даём микрозадачам осесть, иначе
+  // проверка успевает раньше, чем ушёл бы лишний вызов.
+  await page.waitForTimeout(300);
+
+  expect(await page.evaluate(() => window.__upserts.length)).toBe(1);
 });

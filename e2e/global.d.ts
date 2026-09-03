@@ -12,5 +12,7 @@ declare global {
     __cloud: { setCloud: (client: unknown) => void };
     /** Буфер вызовов `upsert` в e2e/cloud-push.spec.ts. */
     __upserts: Array<{ id: string; document: { nodes: Record<string, unknown> } }>;
+    /** Переключатель отказа `upsert` в заглушке e2e/cloud-push.spec.ts — меняется прямо из теста. */
+    __failUpsert: boolean;
   }
 }
