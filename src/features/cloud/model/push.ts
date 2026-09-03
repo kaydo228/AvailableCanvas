@@ -13,6 +13,7 @@ import { readSyncState, writeSyncState } from '@/features/persistence/syncStore'
 import type { BoardDocument, Id, Project } from '@/shared/types/document';
 
 import { getCloud } from './client';
+import { uploadImages } from './images';
 
 export interface ProjectRow {
   id: string;
@@ -54,6 +55,8 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
     readSyncState(projectId),
   ]);
   if (!project || !document) return false;
+
+  await uploadImages(document, owner);
 
   const row = toRow(project, document, owner, state?.isPublic ?? false);
   const { error } = await cloud.from('projects').upsert(row);

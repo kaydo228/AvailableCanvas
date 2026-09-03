@@ -16,5 +16,7 @@ declare global {
     __failUpsert: boolean;
     /** Счётчик кругов `syncNow` в заглушке e2e/cloud-pull.spec.ts — растёт на каждый remoteList. */
     __syncCalls: number;
+    /** Пути `storage.download` в заглушке e2e/cloud-images.spec.ts — один на реально скачанный файл. */
+    __downloads: string[];
   }
 }

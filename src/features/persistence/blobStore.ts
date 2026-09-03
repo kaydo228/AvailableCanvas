@@ -100,8 +100,29 @@ export const putImage = async (file: Blob): Promise<StoredImage> => {
   return { blobId, ...size };
 };
 
-export const getBlob = async (blobId: Id): Promise<Blob | undefined> =>
-  (await withDB((db) => db.get('blobs', blobId)))?.blob;
+/**
+ * Откуда брать картинку, которой нет локально. Ставится слайсом облака;
+ * без него хранилище работает ровно как раньше — только локально. Импорта
+ * из `features/cloud` здесь нет и не будет: зона хранения не должна знать
+ * про зону синхронизации, только наоборот.
+ */
+type RemoteBlobSource = (blobId: Id) => Promise<Blob | undefined>;
+let remoteSource: RemoteBlobSource | null = null;
+
+export const setRemoteBlobSource = (source: RemoteBlobSource | null): void => {
+  remoteSource = source;
+};
+
+/** Прямая запись блоба с известным id — для скачанного с сервера. */
+export const putBlobDirect = async (blobId: Id, blob: Blob): Promise<void> => {
+  await withDB((db) => db.put('blobs', { blobId, blob }));
+};
+
+export const getBlob = async (blobId: Id): Promise<Blob | undefined> => {
+  const local = (await withDB((db) => db.get('blobs', blobId)))?.blob;
+  if (local) return local;
+  return remoteSource ? remoteSource(blobId) : undefined;
+};
 
 const urlCache = new Map<Id, string>();
 
