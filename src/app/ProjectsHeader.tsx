@@ -8,6 +8,7 @@
 
 import { Plus } from 'lucide-react';
 
+import { AccountMenu } from '@/features/cloud';
 // Импорт напрямую, а не через `@/features/export`: баррель реэкспортирует
 // и `exportPng`, а тот тянет Konva. На списке проектов холста нет.
 import { ImportButton } from '@/features/export/ui/ImportButton';
@@ -30,6 +31,7 @@ export function ProjectsHeader() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
+          <AccountMenu />
           <ThemeToggle />
           <ImportButton />
           <button

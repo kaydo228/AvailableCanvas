@@ -8,5 +8,7 @@ declare global {
     __fills: string[];
     /** Замер в e2e/shortcuts.spec.ts. */
     __zPrevented: boolean | null;
+    /** Подмена клиента Supabase из тестов. Ставится в DEV, см. cloud/model/client.ts. */
+    __cloud: { setCloud: (client: unknown) => void };
   }
 }

@@ -4,8 +4,13 @@ import { createRoot } from 'react-dom/client';
 import '@/index.css';
 
 import { Router } from '@/app/router';
+import { initSession } from '@/features/cloud';
 import { sweepBlobs } from '@/features/persistence';
 import { useBoardStore } from '@/shared/store/board';
+
+// Кто вошёл — спрашиваем один раз при старте, до первого рендера шапки:
+// initSession сам разберётся, что делать без облака (см. cloud/model/session.ts).
+initSession();
 
 // Ручка для e2e: сценарии NFR-03 набивают доску тысячей узлов, кликами это
 // не делается. Только в dev — в собранный бандл не попадает.
