@@ -41,16 +41,23 @@ export function PublicBoardScreen() {
     let cancelled = false;
     setState('loading');
 
-    void loadPublicBoard(projectId).then((board) => {
-      if (cancelled) return;
-      if (!board) {
-        setState('notfound');
-        return;
-      }
-      loadDocument(board.document);
-      setName(board.name);
-      setState('ready');
-    });
+    void loadPublicBoard(projectId)
+      .then((board) => {
+        if (cancelled) return;
+        if (!board) {
+          setState('notfound');
+          return;
+        }
+        loadDocument(board.document);
+        setName(board.name);
+        setState('ready');
+      })
+      .catch(() => {
+        // Ошибка сети, структура данных, `repairDocument` — все это ведёт
+        // в "не найдено". Не логируем сюда: ошибка пройдёт в console как
+        // Unhandled rejection, и того достаточно для отладки.
+        if (!cancelled) setState('notfound');
+      });
 
     return () => {
       cancelled = true;

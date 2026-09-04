@@ -160,3 +160,22 @@ test('чужая доска не оседает в списке проектов
   });
   expect(stored).toBe(0);
 });
+
+test('битая строка с сервера даёт понятное состояние, а не бесконечный спиннер', async ({
+  page,
+}) => {
+  // Сервер отдаёт строку, но в поле `document` лежит не документ
+  // (например, null). `repairDocument` должен его обработать, но если
+  // это всё же будет ошибка — экран обязан показать понятное состояние.
+  const brokenRow = {
+    ...publicRow(),
+    document: null, // или 'не документ', или что-то ещё неправильное
+  };
+  await page.addInitScript(stubCloudClient, [brokenRow]);
+  await page.goto('/s/shared-1');
+
+  // Не должны видеть спиннер бесконечно — должно быть понятное состояние.
+  // Даём 3 секунды для перехода в состояние ошибки.
+  await expect(page.getByText('Доска не найдена или доступ закрыт')).toBeVisible({ timeout: 3000 });
+  await expect(page.locator('canvas')).toHaveCount(0);
+});
