@@ -7,7 +7,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { ProjectsHeader } from '@/app/ProjectsHeader';
-import { useCloudSyncOnLogin } from '@/features/cloud';
+import { AdoptDialog, useCloudSyncOnLogin } from '@/features/cloud';
 import { ProjectDialogs } from '@/features/projects/dialogs/ProjectDialogs';
 import { ProjectsScreen } from '@/features/projects/ProjectsScreen';
 import { AppToaster } from '@/shared/ui';
@@ -58,6 +58,9 @@ export function Router() {
         Экземпляр ровно один, иначе каждый тост двоится.
       */}
       <AppToaster />
+      {/* Тот же уровень, что у тостера: вопрос про перенос досок не привязан
+          к маршруту — открывается сам, как только на входе нашлось что предложить. */}
+      <AdoptDialog />
       <Routes>
         <Route path="/" element={<ProjectsRoute />} />
         <Route

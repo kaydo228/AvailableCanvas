@@ -7,4 +7,5 @@ export { loadPublicBoard, publicPath, publicUrl, setPublic } from './model/share
 export { useCloudSync } from './model/useCloudSync';
 export { useCloudSyncOnLogin } from './model/useCloudSyncOnLogin';
 export { AccountMenu } from './ui/AccountMenu';
+export { AdoptDialog } from './ui/AdoptDialog';
 export { ShareButton } from './ui/ShareButton';

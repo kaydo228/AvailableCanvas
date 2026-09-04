@@ -20,6 +20,8 @@ export interface SyncState {
   /** Опубликована ли доска по ссылке. Хранится здесь, чтобы выгрузка
    *  не ходила за флагом в сеть на каждый круг. */
   isPublic?: boolean;
+  /** На вопрос «перенести в аккаунт?» ответили отказом — не спрашивать снова. */
+  declined?: boolean;
 }
 
 export const readSyncState = async (projectId: Id): Promise<SyncState | undefined> =>

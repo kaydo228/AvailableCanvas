@@ -23,15 +23,61 @@
  * (тот же приём, что и диалоги создания/переименования/удаления), поэтому
  * без явного bump список, открытый в момент входа, не увидел бы результат
  * этого же круга синхронизации до перезахода.
+ *
+ * Перенос локальных досок (задача 9): вопрос читается и, если есть что
+ * предложить, открывается ПЕРЕД кругом синхронизации — круг для доски без
+ * владельца всё равно решает `nothing` (см. `merge.ts`), так что первый
+ * круг такую доску не трогает независимо от того, успел ли человек ответить.
+ * Круг при входе НЕ ждёт ответа: `e2e/cloud-pull.spec.ts` держит инвариант
+ * «один вход — один вызов `syncNow`», и блокировка круга диалогом без
+ * гарантированного срока ответа сломала бы именно его. Вместо ожидания —
+ * диалог сам вызывает `runSyncCycle` повторно после ответа: перенесённая
+ * доска уезжает на сервер в тот же вход, вторым кругом, а не ждёт следующего.
  */
 
 import { useEffect, useRef } from 'react';
+import { create } from 'zustand';
 
 import { useProjectDialogs } from '@/features/projects/dialogsStore';
+import type { Id } from '@/shared/types/document';
 
+import { adoptable } from './adopt';
 import { connectRemoteImages } from './images';
-import { syncNow } from './pull';
+import { localBoards, syncNow } from './pull';
 import { useSession } from './session';
+
+export interface AdoptQuestion {
+  ids: Id[];
+  owner: string;
+  email: string;
+}
+
+interface AdoptQuestionState {
+  /** null — вопрос не открыт. */
+  question: AdoptQuestion | null;
+  ask(question: AdoptQuestion): void;
+  close(): void;
+}
+
+/**
+ * Открытый вопрос «перенести доски» — крошечный стор, а не React state
+ * внутри хука: хук ставится в `Router` и не рисует JSX, диалог смонтирован
+ * рядом с ним отдельным компонентом (`AdoptDialog`), им обоим нужно общее
+ * состояние.
+ */
+export const useAdoptQuestion = create<AdoptQuestionState>()((set) => ({
+  question: null,
+  ask: (question) => set({ question }),
+  close: () => set({ question: null }),
+}));
+
+/**
+ * Круг синхронизации плюс перечитывание списка проектов после него.
+ * Экспортирован: `AdoptDialog` зовёт его же сам после ответа на вопрос —
+ * круг был отложен ради него и должен наконец пройти.
+ */
+export const runSyncCycle = (owner: string): Promise<void> =>
+  syncNow(owner).then(() => useProjectDialogs.getState().bumpRevision());
 
 export const useCloudSyncOnLogin = (): void => {
   const userId = useSession((s) => s.userId);
@@ -50,6 +96,17 @@ export const useCloudSyncOnLogin = (): void => {
     }
     if (syncedFor.current === userId) return;
     syncedFor.current = userId;
-    void syncNow(userId).then(() => useProjectDialogs.getState().bumpRevision());
+
+    void (async () => {
+      const ids = adoptable(await localBoards());
+      if (ids.length > 0) {
+        // Диалог не блокирует круг ниже: он сам вызовет adoptBoards/declineAdoption
+        // и следом ещё раз runSyncCycle, когда человек ответит.
+        useAdoptQuestion
+          .getState()
+          .ask({ ids, owner: userId, email: useSession.getState().email ?? '' });
+      }
+      await runSyncCycle(userId);
+    })();
   }, [userId]);
 };
