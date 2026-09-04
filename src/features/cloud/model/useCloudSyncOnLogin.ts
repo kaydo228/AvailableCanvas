@@ -33,6 +33,16 @@
  * гарантированного срока ответа сломала бы именно его. Вместо ожидания —
  * диалог сам вызывает `runSyncCycle` повторно после ответа: перенесённая
  * доска уезжает на сервер в тот же вход, вторым кругом, а не ждёт следующего.
+ *
+ * Два круга ОБЯЗАНЫ идти по очереди, не параллельно: `AdoptQuestion.cycle` —
+ * промис первого круга, положенный в вопрос при его открытии. Диалог
+ * дожидается именно его, прежде чем начать второй (см. `AdoptDialog.tsx`).
+ * Без этого — раунд правок 1: на медленной сети человек успевает ответить
+ * раньше, чем первый круг вообще дочитает список локальных досок, запись
+ * владельца попадает в его снимок, и оба круга независимо решают выгружать
+ * одну и ту же доску — двойной `upsert` и повторная выгрузка картинок.
+ * `upsert` идемпотентен и данные это не портит, но круги обязаны быть
+ * сериализованы, а не полагаться на удачное совпадение по времени.
  */
 
 import { useEffect, useRef } from 'react';
@@ -50,6 +60,8 @@ export interface AdoptQuestion {
   ids: Id[];
   owner: string;
   email: string;
+  /** Промис первого круга — второй круг (в `AdoptDialog`) обязан его дождаться. */
+  cycle: Promise<void>;
 }
 
 interface AdoptQuestionState {
@@ -99,14 +111,22 @@ export const useCloudSyncOnLogin = (): void => {
 
     void (async () => {
       const ids = adoptable(await localBoards());
+      // Круг стартует независимо от того, есть ли вопрос — считать его
+      // здесь, а не внутри `if`, чтобы промис существовал ДО того, как
+      // диалог (если он появится) сможет на него подписаться.
+      const cycle = runSyncCycle(userId);
       if (ids.length > 0) {
-        // Диалог не блокирует круг ниже: он сам вызовет adoptBoards/declineAdoption
-        // и следом ещё раз runSyncCycle, когда человек ответит.
-        useAdoptQuestion
-          .getState()
-          .ask({ ids, owner: userId, email: useSession.getState().email ?? '' });
+        // Диалог не блокирует круг выше: он сам вызовет adoptBoards/declineAdoption
+        // и следом дождётся `cycle`, прежде чем запустить второй runSyncCycle —
+        // круги идут по очереди, не параллельно (раунд правок 1).
+        useAdoptQuestion.getState().ask({
+          ids,
+          owner: userId,
+          email: useSession.getState().email ?? '',
+          cycle,
+        });
       }
-      await runSyncCycle(userId);
+      await cycle;
     })();
   }, [userId]);
 };
