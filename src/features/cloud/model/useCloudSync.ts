@@ -25,6 +25,21 @@ import { useSession } from './session';
 /** Пауза после сохранения в IndexedDB, прежде чем везти доску на сервер. */
 export const CLOUD_PUSH_DELAY_MS = 3000;
 
+/**
+ * Отражает исход выгрузки в индикаторе: `false` — «Сохранено только здесь»,
+ * `true` — обратно в «Все изменения сохранены».
+ *
+ * Тревожные состояния (`conflict`, `deleted`, `error`, `saving`) не трогаем:
+ * они про другую проблему, и молчаливый откат в «сохранено» под ними был бы
+ * враньём — вкладка всё ещё устарела или пишет локально с ошибкой.
+ */
+const reportPushResult = (ok: boolean): void => {
+  const current = useSaveStatus.getState().status;
+  if (current === 'saved' || current === 'local-only') {
+    useSaveStatus.getState().setStatus(ok ? 'saved' : 'local-only');
+  }
+};
+
 export const useCloudSync = (projectId: Id | undefined): void => {
   const userId = useSession((s) => s.userId);
 
@@ -41,7 +56,7 @@ export const useCloudSync = (projectId: Id | undefined): void => {
         // сработал» от «ещё висит» и после каждой ушедшей выгрузки будет
         // слать лишнюю при любом следующем уходе с холста.
         timer = undefined;
-        void pushProject(projectId, userId);
+        void pushProject(projectId, userId).then(reportPushResult);
       }, CLOUD_PUSH_DELAY_MS);
     });
 
@@ -51,7 +66,7 @@ export const useCloudSync = (projectId: Id | undefined): void => {
         clearTimeout(timer);
         // Уход с холста внутри окна дебаунса не должен откладывать выгрузку
         // до следующего визита — последняя версия обязана уехать сразу.
-        void pushProject(projectId, userId);
+        void pushProject(projectId, userId).then(reportPushResult);
       }
     };
   }, [projectId, userId]);

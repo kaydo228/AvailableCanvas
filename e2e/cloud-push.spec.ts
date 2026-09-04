@@ -219,3 +219,33 @@ test('после уже отправленной выгрузки уход с х
 
   expect(await page.evaluate(() => window.__upserts.length)).toBe(1);
 });
+
+test('индикатор различает «сохранено только здесь» и настоящее сохранение (задача 8)', async ({
+  page,
+}) => {
+  await page.addInitScript(stubCloudClient, { failUpsert: true });
+  await page.goto('/');
+
+  await signIn(page);
+  await createProject(page, 'Доска для индикатора');
+
+  await addShape(page, 'shape-6');
+  // Автосохранение в IndexedDB прошло — документ цел локально...
+  await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+
+  // ...но выгрузка на сервер отказала: индикатор обязан сказать именно это,
+  // а не молчать и не путать это с потерей данных.
+  await page.waitForTimeout(3500);
+  await expect(page.getByText('Сохранено только здесь')).toBeVisible();
+
+  // Сеть починилась, следующая правка уезжает — индикатор возвращается
+  // к обычному «сохранено».
+  await page.evaluate(() => {
+    window.__failUpsert = false;
+  });
+  await addShape(page, 'shape-7');
+  await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+  await page.waitForTimeout(3500);
+  await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+  await expect(page.getByText('Сохранено только здесь')).toBeHidden();
+});

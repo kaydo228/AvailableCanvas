@@ -8,7 +8,7 @@
 
 import { Plus } from 'lucide-react';
 
-import { AccountMenu } from '@/features/cloud';
+import { AccountMenu, cloudEnabled } from '@/features/cloud';
 // Импорт напрямую, а не через `@/features/export`: баррель реэкспортирует
 // и `exportPng`, а тот тянет Konva. На списке проектов холста нет.
 import { ImportButton } from '@/features/export/ui/ImportButton';
@@ -25,9 +25,13 @@ export function ProjectsHeader() {
           <span className="font-semibold text-[0.9375rem] text-ink uppercase tracking-[0.22em]">
             Prostor
           </span>
-          <span className="hidden font-mono text-faint text-micro sm:inline">
-            всё хранится в этом браузере
-          </span>
+          {/* Правда только пока не подключён Supabase (задача 8 cloud-sync):
+              с аккаунтом доски уезжают на сервер, и подпись бы соврала. */}
+          {!cloudEnabled() && (
+            <span className="hidden font-mono text-faint text-micro sm:inline">
+              без аккаунта — всё хранится в этом браузере
+            </span>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">

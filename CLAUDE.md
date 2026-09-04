@@ -2,8 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Prostor — бесконечная доска для диаграмм, заметок и изображений. Бэкенда нет,
-данные живут в браузере. ТЗ: [docs/SPEC.md](docs/SPEC.md).
+Prostor — бесконечная доска для диаграмм, заметок и изображений. Без аккаунта
+данные не покидают браузер; с аккаунтом доски и картинки синхронизируются
+через Supabase. ТЗ: [docs/SPEC.md](docs/SPEC.md).
 
 ## Команды
 

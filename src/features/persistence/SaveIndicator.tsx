@@ -10,6 +10,7 @@ const TEXT = {
   error: 'Не удалось сохранить',
   conflict: 'Изменена в другой вкладке',
   deleted: 'Проект удалён',
+  'local-only': 'Сохранено только здесь',
 } as const;
 
 /** Состояния, в которых индикатор говорит о потере данных, а не о ходе работы. */
@@ -32,7 +33,9 @@ export const SaveIndicator = () => {
     >
       {status === 'saving' && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
       {status === 'saved' && <Check className="size-3.5" aria-hidden="true" />}
-      {status === 'error' && <CloudOff className="size-3.5" aria-hidden="true" />}
+      {(status === 'error' || status === 'local-only') && (
+        <CloudOff className="size-3.5" aria-hidden="true" />
+      )}
       {(status === 'conflict' || status === 'deleted') && (
         <TriangleAlert className="size-3.5" aria-hidden="true" />
       )}

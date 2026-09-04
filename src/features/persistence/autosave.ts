@@ -34,7 +34,13 @@ export type SaveStatus =
   /** Документ переписан другой вкладкой — эта устарела. */
   | 'conflict'
   /** Проект удалён, писать некуда. */
-  | 'deleted';
+  | 'deleted'
+  /**
+   * Сохранено локально, но не уехало на сервер (`useCloudSync`, задача 4).
+   * Данные целы — это ход работы, а не тревога, поэтому в `ALARMING`
+   * (`SaveIndicator.tsx`) это состояние не входит.
+   */
+  | 'local-only';
 
 interface SaveState {
   status: SaveStatus;
