@@ -27,6 +27,12 @@ const CanvasScreen = lazy(async () => {
   return { default: Screen };
 });
 
+/** Публичная доска (задача 7 cloud-sync) — та же причина, что у `CanvasScreen`. */
+const PublicBoardScreen = lazy(async () => {
+  const { PublicBoardScreen: Screen } = await import('@/app/PublicBoardScreen');
+  return { default: Screen };
+});
+
 function ProjectsRoute() {
   return (
     <div className="min-h-screen bg-paper">
@@ -65,6 +71,14 @@ export function Router() {
             */
             <Suspense fallback={<div className="h-screen bg-paper" />}>
               <CanvasScreen />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/s/:projectId"
+          element={
+            <Suspense fallback={<div className="h-screen bg-paper" />}>
+              <PublicBoardScreen />
             </Suspense>
           }
         />

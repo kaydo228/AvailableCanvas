@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
-import { useCloudSync } from '@/features/cloud';
+import { ShareButton, useCloudSync } from '@/features/cloud';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
@@ -173,6 +173,7 @@ export function CanvasScreen() {
 
         <div className="ml-auto flex items-center gap-1.5">
           <ThemeToggle />
+          {projectId && <ShareButton projectId={projectId} />}
           <ExportMenu name={state.name} />
         </div>
       </header>
