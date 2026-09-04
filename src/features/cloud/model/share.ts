@@ -28,11 +28,15 @@ export const setPublic = async (projectId: Id, isPublic: boolean): Promise<boole
   const cloud = getCloud();
   if (!cloud) return false;
 
-  const { error } = await cloud
+  // `.select()` — не украшение: `update` без него отвечает успехом и на ноль
+  // затронутых строк (правило доступа отсеяло чужую доску, строки ещё нет на
+  // сервере), а интерфейс рапортовал бы «опубликовано» при неизменном флаге.
+  const { data, error } = await cloud
     .from('projects')
     .update({ is_public: isPublic })
-    .eq('id', projectId);
-  if (error) return false;
+    .eq('id', projectId)
+    .select('id');
+  if (error || data?.length !== 1) return false;
 
   const state = await readSyncState(projectId);
   await writeSyncState({ projectId, dirty: false, ...state, isPublic });
@@ -46,9 +50,18 @@ export const loadPublicBoard = async (projectId: Id): Promise<PublicBoard | null
   // Без входа: правило доступа в базе само отдаст строку, только если
   // `is_public` истинно. Проверять это здесь ещё раз незачем — и опасно:
   // две проверки в разных местах разъезжаются.
-  const { data, error } = await cloud.from('projects').select('*').eq('id', projectId).single();
+  //
+  // Колонки перечислены поимённо, а не `*`: `owner` в ответе анониму — это
+  // uuid владельца, то есть имя его папки в хранилище картинок, и `*` отдавал
+  // бы его каждому, кто открыл публичную ссылку. Превью и времена публичному
+  // экрану тоже не нужны.
+  const { data, error } = await cloud
+    .from('projects')
+    .select('name, document')
+    .eq('id', projectId)
+    .single();
   if (error || !data) return null;
 
-  const row = data as ProjectRow;
+  const row = data as Pick<ProjectRow, 'name' | 'document'>;
   return { name: row.name, document: repairDocument(row.document).document };
 };
