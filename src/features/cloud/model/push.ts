@@ -56,6 +56,16 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
   ]);
   if (!project || !document) return false;
 
+  // Согласие на перенос проверяется здесь, а не в вызывающих: их два
+  // (`useCloudSync` на холсте и круг синхронизации), и любой третий должен
+  // получить тот же запрет даром. `declined` — ответ «Оставить локальными»,
+  // который иначе отменялся бы первым же сдвигом узла на этой доске.
+  // Чужой `owner` — доска другого пользователя на общем устройстве: `decide`
+  // защищает её специально, а прямая выгрузка обходила эту защиту с холста.
+  if (state?.declined === true || (state?.owner !== undefined && state.owner !== owner)) {
+    return false;
+  }
+
   // Картинки — первыми: при настоящей (не 409) ошибке выгрузки строку доски
   // не пишем вовсе, иначе на сервере окажется документ со ссылкой на файл,
   // которого там нет — на другом устройстве это откроется дырой вместо
@@ -83,6 +93,16 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
   return !error;
 };
 
-export const deleteRemote = async (projectId: Id): Promise<void> => {
-  await getCloud()?.from('projects').delete().eq('id', projectId);
+/**
+ * Удаление строки на сервере. `false` — сервера не спросили или он отказал.
+ * Проглатывать этот отказ нельзя: локально доска уже снесена, и молчаливый
+ * провал означает, что она вернётся скачиванием на следующем входе, а человек
+ * узнает об этом сам и не поймёт почему (см. README, «Чего не умеет»).
+ */
+export const deleteRemote = async (projectId: Id): Promise<boolean> => {
+  const cloud = getCloud();
+  if (!cloud) return false;
+
+  const { error } = await cloud.from('projects').delete().eq('id', projectId);
+  return !error;
 };
