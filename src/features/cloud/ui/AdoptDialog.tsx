@@ -10,6 +10,10 @@
  * `declineAdoption`, оба пишут `sync`-запись, которую `adoptable` при
  * следующем входе больше не найдёт.
  *
+ * Escape и клик мимо — НЕ ответ: они просто закрывают вопрос, ничего не
+ * записывая. Раньше закрытие означало необратимый отказ для всех досок сразу,
+ * а спросить повторно негде — переноса больше нигде в интерфейсе нет.
+ *
  * Запись ответа и второй круг НЕ идут параллельно первому: `answer` сперва
  * дожидается `question.cycle` (промис первого круга) и только потом зовёт
  * `runSyncCycle` заново. Раунд правок 1: без этого ожидания второй круг мог
@@ -23,6 +27,7 @@
 
 import { Dialog } from 'radix-ui';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { adoptBoards, declineAdoption } from '../model/adopt';
 import { runSyncCycle, useAdoptQuestion } from '../model/useCloudSyncOnLogin';
@@ -73,11 +78,22 @@ export function AdoptDialog() {
       .then(() => {
         closeQuestion();
         void runSyncCycle(owner);
+      })
+      .catch((error: unknown) => {
+        // Без перехвата отказ записи или круга оставлял `busy` включённым
+        // навсегда: обе кнопки заблокированы, диалог модальный — и всё
+        // приложение стоит до перезагрузки страницы. Закрываем: ответ не
+        // записан, значит вопрос сам вернётся при следующем входе.
+        console.warn('Не удалось записать ответ о переносе досок', error);
+        closeQuestion();
+        toast.error('Не удалось запомнить ответ', {
+          description: 'Доски остались как были — спросим при следующем входе.',
+        });
       });
   };
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && answer(() => declineAdoption(ids))}>
+    <Dialog.Root open onOpenChange={(open) => !open && !busy && closeQuestion()}>
       <Dialog.Portal>
         <Dialog.Overlay className={OVERLAY} />
         <Dialog.Content className={CONTENT}>

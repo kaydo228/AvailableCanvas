@@ -312,7 +312,19 @@ function DeleteDialog({ projectId }: { projectId: Id }) {
                     // Удалённую строку сносим только за вошедшим: без owner
                     // на сервере нечего искать — доска туда и не уезжала.
                     const owner = useSession.getState().userId;
-                    if (owner) await deleteRemote(projectId);
+                    // Отказ сервера не глотаем. Локально доска уже снесена
+                    // вместе с записью синхронизации, и на следующем входе
+                    // она вернётся скачиванием — про это надо сказать сразу,
+                    // иначе воскресшая доска выглядит как поломка (README,
+                    // «Чего не умеет»).
+                    if (owner && !(await deleteRemote(projectId))) {
+                      toast.error('Доска удалена только здесь', {
+                        description:
+                          'Сервер не ответил — при следующем входе она вернётся в список. ' +
+                          'Удалите её ещё раз, когда будет связь.',
+                        duration: Number.POSITIVE_INFINITY,
+                      });
+                    }
                     bumpRevision();
                     close();
                   });
