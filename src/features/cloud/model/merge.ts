@@ -52,8 +52,11 @@ export function decide(local: LocalBoard[], remote: RemoteBoard[], owner: string
     }
 
     // На сервере доски нет. Была ли она там когда-нибудь — вот весь вопрос.
+    // Но невыгруженные правки живут только здесь: «удалили с другого
+    // устройства» и «не успели выгрузить» с сервера выглядят одинаково,
+    // а восстановить снесённое нечем — поэтому dirty оставляем как есть.
     if (state?.remoteUpdatedAt !== undefined) {
-      decisions.push({ kind: 'delete-local', projectId });
+      decisions.push({ kind: state.dirty ? 'nothing' : 'delete-local', projectId });
     } else if (state?.owner === owner) {
       decisions.push({ kind: 'push', projectId });
     } else {

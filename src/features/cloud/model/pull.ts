@@ -15,12 +15,21 @@ import { getCloud } from './client';
 import { type Decision, decide, type LocalBoard, type RemoteBoard } from './merge';
 import { type ProjectRow, pushProject, rowUpdatedAt } from './push';
 
-export const remoteList = async (owner: string): Promise<RemoteBoard[]> => {
+/**
+ * Список досок владельца на сервере. `null` — «спросить не удалось»: сети нет,
+ * токен протух, проект уснул, правило доступа отказало.
+ *
+ * Отличать это от пустого списка обязательно. Пустой массив означает «у
+ * владельца нет ни одной доски», и `decide` на нём выносит `delete-local`
+ * каждой доске, которая когда-то синхронизировалась — то есть один отказ
+ * сервера стирал бы из IndexedDB все синхронизированные доски разом.
+ */
+export const remoteList = async (owner: string): Promise<RemoteBoard[] | null> => {
   const cloud = getCloud();
-  if (!cloud) return [];
+  if (!cloud) return null;
 
   const { data, error } = await cloud.from('projects').select('id, updated_at').eq('owner', owner);
-  if (error || !data) return [];
+  if (error || !data) return null;
 
   return data.map((row) => ({ id: row.id as Id, updatedAt: rowUpdatedAt(row.updated_at) }));
 };
@@ -101,6 +110,9 @@ export async function applyDecisions(decisions: Decision[], actions: SyncActions
 
 export const syncNow = async (owner: string): Promise<void> => {
   const [local, remote] = await Promise.all([localBoards(), remoteList(owner)]);
+  // Сервер не ответил — круг не состоялся. Ни одного решения: «доски нет на
+  // сервере» неотличимо от «сервер не сказал», а цена ошибки разная.
+  if (!remote) return;
 
   await applyDecisions(decide(local, remote, owner), {
     push: (projectId) => pushProject(projectId, owner),

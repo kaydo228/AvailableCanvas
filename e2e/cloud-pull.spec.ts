@@ -25,7 +25,13 @@ interface Row {
   is_public: boolean;
 }
 
-const stubCloudClient = (rows: Row[]) => {
+/**
+ * `failList` — сервер отвечает на запрос списка досок ОШИБКОЙ, а не пустым
+ * списком. Раньше заглушка этих двух исходов не различала, и сценарий про
+ * исчезнувшую доску закреплял как правильное то, что на самом деле было
+ * потерей данных: любой отказ сервера читался как «у владельца нет досок».
+ */
+const stubCloudClient = ({ rows, failList = false }: { rows: Row[]; failList?: boolean }) => {
   const user = { id: 'user-1', email: 'test@example.com' };
   type FakeSession = { user: typeof user };
   let session: FakeSession | null = null;
@@ -59,6 +65,9 @@ const stubCloudClient = (rows: Row[]) => {
           // Вызывается ровно раз на каждый syncNow — считаем как счётчик кругов синхронизации.
           if (column === 'owner') {
             window.__syncCalls += 1;
+            if (failList) {
+              return Promise.resolve({ data: null, error: { message: 'JWT expired' } });
+            }
             const data = rows
               .filter((row) => row.owner === value)
               .map((row) => ({ id: row.id, updated_at: row.updated_at }));
@@ -168,18 +177,20 @@ test('доска появляется в списке сразу после вх
     background: { color: '#fbfbfd', grid: 'dots' },
   };
 
-  await page.addInitScript(stubCloudClient, [
-    {
-      id: 'remote-1',
-      owner: 'user-1',
-      name: 'Облачная доска',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      thumbnail: null,
-      document: remoteDocument,
-      is_public: false,
-    },
-  ]);
+  await page.addInitScript(stubCloudClient, {
+    rows: [
+      {
+        id: 'remote-1',
+        owner: 'user-1',
+        name: 'Облачная доска',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        thumbnail: null,
+        document: remoteDocument,
+        is_public: false,
+      },
+    ],
+  });
   await page.goto('/');
 
   await signIn(page);
@@ -199,9 +210,11 @@ test('доска появляется в списке сразу после вх
   expect(nodeIds).toContain('shape-server');
 });
 
-test('доска, исчезнувшая с сервера, пропадает из списка после входа', async ({ page }) => {
-  // Сервер не знает ни одной доски владельца — ровно то, что нужно для сценария.
-  await page.addInitScript(stubCloudClient, []);
+test('сервер ответил пусто — доска, исчезнувшая с сервера, пропадает из списка', async ({
+  page,
+}) => {
+  // Сервер отвечает пустым списком: у владельца и правда нет ни одной доски.
+  await page.addInitScript(stubCloudClient, { rows: [] });
   await page.goto('/');
 
   const projectId = await createProject(page, 'Была на сервере');
@@ -221,10 +234,33 @@ test('доска, исчезнувшая с сервера, пропадает �
   await expect(page.getByText('Была на сервере')).toHaveCount(0);
 });
 
+test('сервер ответил ошибкой — синхронизированная доска остаётся на месте', async ({ page }) => {
+  // Тот же вход, единственная разница — сервер не смог ответить. Отказ сети,
+  // протухший токен, уснувший проект: раньше это было неотличимо от «досок
+  // нет», и каждая синхронизированная доска стиралась из IndexedDB.
+  await page.addInitScript(stubCloudClient, { rows: [], failList: true });
+  await page.goto('/');
+
+  const projectId = await createProject(page, 'Пережила отказ сервера');
+  await writeSyncState(page, {
+    projectId,
+    owner: 'user-1',
+    remoteUpdatedAt: Date.now(),
+    dirty: false,
+  });
+  await goBackToList(page);
+
+  await signIn(page);
+
+  // Круг синхронизации прошёл (иначе проверять было бы нечего), а доска цела.
+  await expect.poll(() => page.evaluate(() => window.__syncCalls)).toBe(1);
+  await expect(page.getByText('Пережила отказ сервера')).toBeVisible();
+});
+
 test('на вход уходит ровно один круг синхронизации, а выход и повторный вход — ещё один', async ({
   page,
 }) => {
-  await page.addInitScript(stubCloudClient, []);
+  await page.addInitScript(stubCloudClient, { rows: [] });
   await page.goto('/');
 
   await signIn(page);
