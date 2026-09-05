@@ -62,7 +62,12 @@ test('вход показывает почту и «Выйти», выход в�
 
   await header.getByRole('button', { name: 'Войти' }).click();
 
-  const dialog = page.getByRole('dialog');
+  // Сужаем до диалога входа по заголовку: сразу после входа приложение
+  // может открыть ВТОРОЙ диалог — вопрос AdoptDialog «Перенести доски в
+  // аккаунт?» (если на устройстве есть локальная доска без владельца).
+  // Без фильтра getByRole('dialog') иногда находит уже его, и проверка
+  // «диалог скрылся» ловит гонку вместо реального закрытия формы входа.
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Вход' });
   await dialog.getByLabel('Почта').fill('test@example.com');
   await dialog.getByLabel('Пароль').fill('secret123');
   await dialog.getByRole('button', { name: 'Войти', exact: true }).click();
