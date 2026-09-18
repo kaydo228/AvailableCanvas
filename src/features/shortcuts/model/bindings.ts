@@ -126,6 +126,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   // отведены только сочетания с $mod.
   tool('Digit7', '7', 'Семиугольник', 'heptagon'),
   tool('KeyL', 'L', 'Линия', 'connector'),
+  tool('KeyP', 'P', 'Стрелка', 'pen'),
   tool('KeyI', 'I', 'Изображение', 'image'),
 
   // ── Правка, раздел 6.3 ────────────────────────────────────────────────

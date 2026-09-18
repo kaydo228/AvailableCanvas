@@ -4,12 +4,28 @@
  * после отпускания кнопки.
  */
 
-import { Rect } from 'react-konva';
+import { Line, Rect } from 'react-konva';
 
 import type { Node } from '@/shared/types/document';
 
 export function PreviewNode({ node }: { node: Node | null }) {
   if (!node || node.type === 'connector') return null;
+
+  if (node.type === 'draw') {
+    return (
+      <Line
+        x={node.x}
+        y={node.y}
+        points={node.points}
+        stroke={node.stroke}
+        strokeWidth={node.strokeWidth}
+        lineCap="round"
+        lineJoin="round"
+        opacity={0.6}
+        listening={false}
+      />
+    );
+  }
 
   return (
     <Rect

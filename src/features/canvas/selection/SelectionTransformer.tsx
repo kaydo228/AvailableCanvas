@@ -82,7 +82,6 @@ export function SelectionTransformer() {
   // но пересчитывать привязку надо при любой смене набора узлов: ручки ищутся
   // по id в дереве Konva, и после перерисовки слоя трансформер держал бы
   // ссылки на выброшенные фигуры.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: см. комментарий выше
   useEffect(() => {
     const transformer = ref.current;
     if (!transformer) return;
@@ -94,7 +93,7 @@ export function SelectionTransformer() {
     }
 
     const shapes = selection
-      .map((id) => stage.findOne(`#${id}`))
+      .map((id) => (nodes?.[id]?.type === 'draw' ? null : stage.findOne(`#${id}`)))
       .filter((shape): shape is Konva.Node => Boolean(shape));
 
     transformer.nodes(shapes);

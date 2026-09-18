@@ -14,13 +14,22 @@ import { themeInk } from '@/features/canvas/nodes/textStyle';
 import { normalizeRect } from '@/features/canvas/tools/geometry';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
-
+import { drawFromPoints, isDrawTooShort } from './drawTool';
 import { shapeFromDrag } from './shapeTool';
 import { stickyFromDrag } from './stickyTool';
 import { DEFAULT_TEXT_COLOR, textFromDrag } from './textTool';
 
 /** Инструменты, которые создают узлы. Остальные жест не перехватывают. */
-const CREATING = new Set(['rect', 'ellipse', 'diamond', 'hexagon', 'heptagon', 'text', 'sticky']);
+const CREATING = new Set([
+  'rect',
+  'ellipse',
+  'diamond',
+  'hexagon',
+  'heptagon',
+  'text',
+  'sticky',
+  'pen',
+]);
 
 export function useToolController() {
   const activeTool = useBoardStore((s) => s.activeTool);
@@ -33,11 +42,13 @@ export function useToolController() {
   const selectInBox = useBoardStore((s) => s.selectInBox);
 
   const start = useRef<WorldPoint | null>(null);
+  const drawPoints = useRef<WorldPoint[]>([]);
   const [preview, setPreview] = useState<Node | null>(null);
   // Рамка выделения инструментом «Выбор». Живёт отдельно от preview:
   // это не будущий узел, а временная геометрия.
   const [marquee, setMarquee] = useState<Rect | null>(null);
 
+  const drawing = activeTool === 'pen';
   const creating = CREATING.has(activeTool);
 
   const pointerWorld = useCallback(
@@ -91,9 +102,11 @@ export function useToolController() {
         return;
       }
       const point = pointerWorld(event.target.getStage());
-      if (point) start.current = point;
+      if (!point) return;
+      start.current = point;
+      if (drawing) drawPoints.current = [point];
     },
-    [activeTool, clearSelection, creating, pointerWorld],
+    [activeTool, clearSelection, creating, drawing, pointerWorld],
   );
 
   const onMouseMove = useCallback(
@@ -101,6 +114,15 @@ export function useToolController() {
       if (!start.current) return;
       const point = pointerWorld(event.target.getStage());
       if (!point) return;
+
+      if (drawing) {
+        const points = drawPoints.current;
+        const last = points[points.length - 1];
+        const zoom = viewport?.zoom ?? 1;
+        if (!last || Math.hypot(point.x - last.x, point.y - last.y) * zoom >= 1) points.push(point);
+        setPreview(drawFromPoints(points));
+        return;
+      }
 
       if (creating) {
         setPreview(build(start.current, point, event.evt.shiftKey));
@@ -115,7 +137,7 @@ export function useToolController() {
         selectInBox(box);
       }
     },
-    [activeTool, build, creating, pointerWorld, selectInBox],
+    [activeTool, build, creating, drawing, pointerWorld, selectInBox, viewport?.zoom],
   );
 
   const onMouseUp = useCallback(
@@ -125,6 +147,21 @@ export function useToolController() {
       setPreview(null);
       setMarquee(null);
       if (!from) return;
+
+      if (drawing) {
+        const to = pointerWorld(event.target.getStage()) ?? from;
+        const points = drawPoints.current;
+        const last = points[points.length - 1];
+        if (!last || last.x !== to.x || last.y !== to.y) points.push(to);
+        drawPoints.current = [];
+
+        const node = drawFromPoints(points);
+        if (!node || isDrawTooShort(points, viewport?.zoom ?? 1)) return;
+        addNode(node);
+        select([node.id]);
+        setTool('select');
+        return;
+      }
 
       if (!creating) {
         // Рамкой уже выделили по ходу движения, на отпускании делать нечего.
@@ -148,7 +185,17 @@ export function useToolController() {
         startEditing(node.id);
       }
     },
-    [addNode, build, creating, pointerWorld, select, setTool, startEditing],
+    [
+      addNode,
+      build,
+      creating,
+      drawing,
+      pointerWorld,
+      select,
+      setTool,
+      startEditing,
+      viewport?.zoom,
+    ],
   );
 
   return { onMouseDown, onMouseMove, onMouseUp, preview, marquee, creating };
