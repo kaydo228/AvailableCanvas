@@ -22,6 +22,7 @@ const TOOLS: Array<{ id: Tool; label: string; hotkey: string }> = [
   { id: 'hexagon', label: 'Шестиугольник', hotkey: 'X' },
   { id: 'heptagon', label: 'Семиугольник', hotkey: '7' },
   { id: 'connector', label: 'Линия', hotkey: 'L' },
+  { id: 'pen', label: 'Стрелка', hotkey: 'P' },
 ];
 
 const BTN =

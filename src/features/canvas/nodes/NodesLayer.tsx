@@ -14,6 +14,7 @@ import { useGroupDrag } from '@/features/canvas/selection/useGroupDrag';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 import type { NodeViewProps } from './contract';
+import { DrawView } from './DrawView';
 import { GroupView } from './GroupView';
 import { ImageView } from './ImageView';
 import { ShapeView } from './ShapeView';
@@ -31,6 +32,7 @@ const RENDERERS = {
   text: TextView,
   sticky: StickyView,
   image: ImageView,
+  draw: DrawView,
   connector: ConnectorView,
   group: GroupView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
