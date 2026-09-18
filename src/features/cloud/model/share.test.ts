@@ -51,11 +51,11 @@ describe('публичная ссылка', () => {
   });
 
   it('полный адрес берёт origin страницы', () => {
-    expect(publicUrl('p1', 'https://prostor.example')).toBe('https://prostor.example/s/p1');
+    expect(publicUrl('p1', 'https://prostor.example')).toBe('https://prostor.example/#/s/p1');
   });
 
   it('лишний слэш на конце origin не даёт двойного', () => {
-    expect(publicUrl('p1', 'https://prostor.example/')).toBe('https://prostor.example/s/p1');
+    expect(publicUrl('p1', 'https://prostor.example/')).toBe('https://prostor.example/#/s/p1');
   });
 });
 
