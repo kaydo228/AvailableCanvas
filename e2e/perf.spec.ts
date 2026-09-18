@@ -220,3 +220,71 @@ test('NFR-01: панорамирование 700 фигур и 300 коннек�
   expect(result.nodeCount).toBe(1000);
   check(result, 'pan/connectors');
 });
+
+test('NFR-03: сохранение доски на 1000 узлов не блокирует главный поток', async ({ page }) => {
+  await openFreshProject(page, 'Тысяча узлов');
+
+  const measurement = await page.evaluate(async () => {
+    const store = window.__board.getState();
+    const nodes: Record<string, unknown> = {};
+    const order: string[] = [];
+    for (let i = 0; i < 1000; i++) {
+      const id = `n${i}`;
+      order.push(id);
+      nodes[id] = {
+        id,
+        type: 'shape',
+        shape: 'rect',
+        x: (i % 40) * 120,
+        y: Math.floor(i / 40) * 90,
+        width: 100,
+        height: 70,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        fill: '#dbeafe',
+        stroke: '#1d4ed8',
+        strokeWidth: 2,
+        label: { text: `Узел номер ${i}`, size: 14, color: '#0f172a' },
+      };
+    }
+    store.loadDocument({ ...window.__board.getState().document, nodes, order });
+    await new Promise((r) => setTimeout(r, 700));
+
+    const longTasks: number[] = [];
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) longTasks.push(entry.duration);
+    });
+    observer.observe({ entryTypes: ['longtask'] });
+
+    let previous = performance.now();
+    let worstFrameGap = 0;
+    let running = true;
+    const tick = () => {
+      const now = performance.now();
+      worstFrameGap = Math.max(worstFrameGap, now - previous);
+      previous = now;
+      if (running) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+
+    store.updateNode('n0', { x: 5 });
+    await new Promise((r) => setTimeout(r, 1500));
+
+    running = false;
+    observer.disconnect();
+
+    return {
+      nodeCount: Object.keys(window.__board.getState().document.nodes).length,
+      worstFrameGap: Math.round(worstFrameGap),
+      worstLongTask: Math.round(Math.max(0, ...longTasks)),
+      longTaskCount: longTasks.length,
+    };
+  });
+
+  console.log('NFR-03:', JSON.stringify(measurement));
+
+  expect(measurement.nodeCount).toBe(1000);
+  expect(measurement.worstFrameGap).toBeLessThan(50);
+  expect(measurement.worstLongTask).toBeLessThan(50);
+});
