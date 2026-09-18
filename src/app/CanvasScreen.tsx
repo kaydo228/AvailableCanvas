@@ -12,7 +12,8 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
-import { ShareButton, useCloudSync } from '@/features/cloud';
+import { AccessBadge, ShareButton, useCloudSync } from '@/features/cloud';
+import type { ProjectAccess } from '@/features/cloud/model/access';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
@@ -26,12 +27,13 @@ import {
 import { beginSaveSession, endSaveSession, useAutosave } from '@/features/persistence/autosave';
 import { describeRepairs, repairDocument } from '@/features/persistence/repair';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
+import { readSyncState } from '@/features/persistence/syncStore';
 import { HelpDialog, useShortcuts } from '@/features/shortcuts';
 import { useBoardStore } from '@/shared/store/board';
 import { ThemeToggle } from '@/shared/ui';
 
 /** `undefined` — ещё грузим, `null` — такого проекта нет. */
-type LoadState = { name: string } | null | undefined;
+type LoadState = { name: string; access: ProjectAccess; isPublic: boolean } | null | undefined;
 
 export function CanvasScreen() {
   const { projectId } = useParams();
@@ -53,7 +55,7 @@ export function CanvasScreen() {
 
   // Выгрузка на сервер (задача 4 cloud-sync). Свой дебаунс 3000 мс поверх
   // уже сохранённого документа — не привязан к автосохранению.
-  useCloudSync(projectId, 'owner');
+  useCloudSync(projectId, state?.access);
 
   // История отмен (FR-10). Своя у каждого проекта, чистится на входе и выходе.
   useHistorySession();
@@ -72,7 +74,11 @@ export function CanvasScreen() {
     setState(undefined);
 
     const open = async () => {
-      const [project, stored] = await Promise.all([getProject(projectId), getDocument(projectId)]);
+      const [project, stored, sync] = await Promise.all([
+        getProject(projectId),
+        getDocument(projectId),
+        readSyncState(projectId),
+      ]);
       if (cancelled) return;
       if (!project || !stored) {
         setState(null);
@@ -107,7 +113,11 @@ export function CanvasScreen() {
       // Открытие проекта — не действие пользователя. Без явной чистки первый
       // Cmd+Z откатывал бы саму загрузку: доска на секунду становилась пустой.
       clearHistory();
-      setState({ name: project.name });
+      setState({
+        name: project.name,
+        access: sync?.access ?? 'owner',
+        isPublic: sync?.isPublic ?? false,
+      });
     };
 
     void open();
@@ -169,11 +179,14 @@ export function CanvasScreen() {
         <span className="h-4 w-px shrink-0 bg-rule" aria-hidden="true" />
 
         <span className="min-w-0 truncate font-medium text-ink text-sm">{state.name}</span>
+        <AccessBadge access={state.access} />
         <SaveIndicator />
 
         <div className="ml-auto flex items-center gap-1.5">
           <ThemeToggle />
-          {projectId && <ShareButton projectId={projectId} />}
+          {projectId && (
+            <ShareButton projectId={projectId} access={state.access} isPublic={state.isPublic} />
+          )}
           <ExportMenu name={state.name} />
         </div>
       </header>
