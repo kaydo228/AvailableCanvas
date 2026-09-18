@@ -10,6 +10,7 @@
 
 import { Dialog } from 'radix-ui';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { signIn, signUp } from '@/features/cloud/model/session';
 
@@ -56,14 +57,19 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
   const submit = async () => {
     setBusy(true);
     setError(null);
-    const fail = mode === 'signIn' ? await signIn(email, password) : await signUp(email, password);
-    if (fail) {
-      setError(fail);
+    const result =
+      mode === 'signIn' ? await signIn(email, password) : await signUp(email, password);
+    if (result.error) {
+      setError(result.error);
       setBusy(false);
       return;
     }
     onOpenChange(false);
     reset();
+    if (mode === 'signIn') toast.success('Вход выполнен');
+    else if (result.needsConfirmation) {
+      toast.success('Проверьте почту и перейдите по ссылке — затем вы войдёте автоматически.');
+    } else toast.success('Регистрация завершена');
   };
 
   return (

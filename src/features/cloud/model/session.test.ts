@@ -3,9 +3,12 @@
  * человек должен понять, что делать, а не читать английскую строку из API.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { authErrorText } from './session';
+import { setCloud } from './client';
+import { authErrorText, signUp } from './session';
+
+afterEach(() => setCloud(null));
 
 describe('authErrorText', () => {
   it('неверная пара логин-пароль', () => {
@@ -30,5 +33,21 @@ describe('authErrorText', () => {
 
   it('пустой ответ тоже должен что-то сказать', () => {
     expect(authErrorText('')).toBe('Не удалось связаться с сервером');
+  });
+});
+
+describe('signUp', () => {
+  it('просит Supabase вернуть подтверждение на адрес открытого приложения', async () => {
+    const signUpWithPassword = vi.fn(async () => ({ data: { session: null }, error: null }));
+    setCloud({ auth: { signUp: signUpWithPassword } } as never);
+
+    await expect(signUp('me@example.com', 'secret123')).resolves.toMatchObject({
+      needsConfirmation: true,
+    });
+    expect(signUpWithPassword).toHaveBeenCalledWith({
+      email: 'me@example.com',
+      password: 'secret123',
+      options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
+    });
   });
 });

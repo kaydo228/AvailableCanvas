@@ -16,6 +16,11 @@ interface SessionState {
   ready: boolean;
 }
 
+export interface AuthResult {
+  error: string | null;
+  needsConfirmation: boolean;
+}
+
 export const useSession = create<SessionState>()(() => ({
   userId: null,
   email: null,
@@ -58,18 +63,25 @@ const MESSAGES: Record<string, string> = {
 export const authErrorText = (message: string): string =>
   MESSAGES[message] ?? (message || 'Не удалось связаться с сервером');
 
-export const signIn = async (email: string, password: string): Promise<string | null> => {
+export const signIn = async (email: string, password: string): Promise<AuthResult> => {
   const cloud = getCloud();
-  if (!cloud) return 'Синхронизация не настроена';
+  if (!cloud) return { error: 'Синхронизация не настроена', needsConfirmation: false };
   const { error } = await cloud.auth.signInWithPassword({ email, password });
-  return error ? authErrorText(error.message) : null;
+  return { error: error ? authErrorText(error.message) : null, needsConfirmation: false };
 };
 
-export const signUp = async (email: string, password: string): Promise<string | null> => {
+export const signUp = async (email: string, password: string): Promise<AuthResult> => {
   const cloud = getCloud();
-  if (!cloud) return 'Синхронизация не настроена';
-  const { error } = await cloud.auth.signUp({ email, password });
-  return error ? authErrorText(error.message) : null;
+  if (!cloud) return { error: 'Синхронизация не настроена', needsConfirmation: false };
+  const { data, error } = await cloud.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
+  });
+  return {
+    error: error ? authErrorText(error.message) : null,
+    needsConfirmation: !error && data.session === null,
+  };
 };
 
 export const signOut = async (): Promise<void> => {
