@@ -1,5 +1,3 @@
--- Полная схема для нового проекта. Для существующего проекта применяйте migration через Supabase CLI.
-
 create extension if not exists pgcrypto;
 create schema if not exists private;
 
