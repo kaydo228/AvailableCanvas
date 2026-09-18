@@ -26,10 +26,12 @@ export const createCloudClient = ({ url, anonKey }: CloudEnv): SupabaseClient | 
 let cached: SupabaseClient | null | undefined;
 
 export const getCloud = (): SupabaseClient | null => {
-  cached ??= createCloudClient({
-    url: import.meta.env.VITE_SUPABASE_URL,
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-  });
+  if (cached === undefined) {
+    cached = createCloudClient({
+      url: import.meta.env.VITE_SUPABASE_URL,
+      anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+    });
+  }
   return cached;
 };
 

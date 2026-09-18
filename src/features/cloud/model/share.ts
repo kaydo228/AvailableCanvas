@@ -22,7 +22,7 @@ export interface PublicBoard {
 export const publicPath = (projectId: Id): string => `/s/${projectId}`;
 
 export const publicUrl = (projectId: Id, origin: string = window.location.origin): string =>
-  `${origin.replace(/\/$/, '')}${publicPath(projectId)}`;
+  `${origin.replace(/\/$/, '')}${import.meta.env.BASE_URL.replace(/\/$/, '')}${publicPath(projectId)}`;
 
 export const setPublic = async (projectId: Id, isPublic: boolean): Promise<boolean> => {
   const cloud = getCloud();
