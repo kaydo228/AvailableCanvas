@@ -17,6 +17,7 @@ describe('drawFromPoints', () => {
       width: 30,
       height: 10,
       points: [0, 0, 10, 5, 30, 10],
+      stroke: '#f8fafc',
     });
   });
 

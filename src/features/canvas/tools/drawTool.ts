@@ -3,7 +3,7 @@
 import type { WorldPoint } from '@/features/canvas/engine/contract';
 import type { DrawNode } from '@/shared/types/document';
 
-export const DEFAULT_DRAW_STROKE = '#111111';
+export const DEFAULT_DRAW_STROKE = '#f8fafc';
 export const DEFAULT_DRAW_WIDTH = 2;
 
 /** Меньше четырёх экранных пикселей — промах, а не стрелка. */
