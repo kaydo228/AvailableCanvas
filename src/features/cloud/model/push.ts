@@ -12,6 +12,7 @@ import { getDocument, getProject } from '@/features/persistence';
 import { readSyncState, writeSyncState } from '@/features/persistence/syncStore';
 import type { BoardDocument, Id, Project } from '@/shared/types/document';
 
+import { canEdit } from './access';
 import { getCloud } from './client';
 import { uploadImages } from './images';
 
@@ -24,6 +25,8 @@ export interface ProjectRow {
   thumbnail: string | null;
   document: BoardDocument;
   is_public: boolean;
+  revision: number;
+  updated_by: string | null;
 }
 
 export const toRow = (
@@ -40,6 +43,8 @@ export const toRow = (
   thumbnail: project.thumbnail ?? null,
   document,
   is_public: isPublic,
+  revision: 0,
+  updated_by: owner,
 });
 
 /** Время строки обратно в миллисекунды — тем же способом во всех местах. */
@@ -62,7 +67,10 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
   // который иначе отменялся бы первым же сдвигом узла на этой доске.
   // Чужой `owner` — доска другого пользователя на общем устройстве: `decide`
   // защищает её специально, а прямая выгрузка обходила эту защиту с холста.
-  if (state?.declined === true || (state?.owner !== undefined && state.owner !== owner)) {
+  const access =
+    state?.access ?? (state?.owner === undefined || state.owner === owner ? 'owner' : undefined);
+  const legacyForeignProject = state?.owner !== undefined && state.owner !== owner && !state.access;
+  if (state?.declined === true || legacyForeignProject || !canEdit(access)) {
     return false;
   }
 
@@ -71,23 +79,36 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
   // которого там нет — на другом устройстве это откроется дырой вместо
   // картинки, и само не починится. Дальше это та же ветка `error`, что и
   // отказ `upsert`: остаётся прежний `remoteUpdatedAt`, ставится `dirty`.
-  const imagesUploaded = await uploadImages(document, owner);
-  const { error } = imagesUploaded
-    ? await cloud.from('projects').upsert(toRow(project, document, owner, state?.isPublic ?? false))
-    : { error: new Error('картинки доски не выгрузились') };
+  const imagesUploaded = await uploadImages(document, projectId);
+  const result = imagesUploaded
+    ? await cloud.rpc('save_project', {
+        p_project_id: project.id,
+        p_name: project.name,
+        p_created_at: new Date(project.createdAt).toISOString(),
+        p_updated_at: new Date(project.updatedAt).toISOString(),
+        p_thumbnail: project.thumbnail ?? null,
+        p_document: document,
+      })
+    : { data: null, error: new Error('картинки доски не выгрузились') };
+  const saved = Array.isArray(result.data) ? result.data[0] : undefined;
+  const error = result.error || !saved;
 
   // `writeSyncState` — это `put`, полная перезапись: при ошибке нельзя молча
   // выбросить remoteUpdatedAt, иначе доска, которая уже уезжала на сервер,
   // после первого же обрыва сети станет неотличима от той, что не уезжала
   // никогда. `exactOptionalPropertyTypes` не даёт положить туда `undefined`
   // явно — если доска ни разу не доехала, ключ просто не пишем.
-  const remoteUpdatedAt = error ? state?.remoteUpdatedAt : project.updatedAt;
+  const remoteUpdatedAt = error ? state?.remoteUpdatedAt : rowUpdatedAt(saved.updated_at);
+  const remoteRevision = error ? state?.remoteRevision : (saved.revision as number);
   await writeSyncState({
     projectId,
-    owner,
+    owner: state?.owner ?? owner,
+    ...(access ? { access } : {}),
     ...(remoteUpdatedAt !== undefined ? { remoteUpdatedAt } : {}),
+    ...(remoteRevision !== undefined ? { remoteRevision } : {}),
     dirty: Boolean(error),
     isPublic: state?.isPublic ?? false,
+    ...(state?.declined !== undefined ? { declined: state.declined } : {}),
   });
 
   return !error;

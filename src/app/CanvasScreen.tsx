@@ -53,7 +53,7 @@ export function CanvasScreen() {
 
   // Выгрузка на сервер (задача 4 cloud-sync). Свой дебаунс 3000 мс поверх
   // уже сохранённого документа — не привязан к автосохранению.
-  useCloudSync(projectId);
+  useCloudSync(projectId, 'owner');
 
   // История отмен (FR-10). Своя у каждого проекта, чистится на входе и выходе.
   useHistorySession();

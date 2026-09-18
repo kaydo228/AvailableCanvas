@@ -52,7 +52,6 @@ import { useProjectDialogs } from '@/features/projects/dialogsStore';
 import type { Id } from '@/shared/types/document';
 
 import { adoptable } from './adopt';
-import { connectRemoteImages } from './images';
 import { localBoards, syncNow } from './pull';
 import { useSession } from './session';
 
@@ -96,12 +95,6 @@ export const useCloudSyncOnLogin = (): void => {
   const syncedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    // Фолбэк на картинки, которых нет локально: этот хук — единственное
-    // место уровня приложения, которое всегда знает текущего userId, и он же
-    // должен сбросить источник в null при выходе — иначе после логаута
-    // хранилище продолжало бы ходить в сеть от имени уже вышедшего.
-    connectRemoteImages(userId);
-
     if (!userId) {
       syncedFor.current = null;
       return;

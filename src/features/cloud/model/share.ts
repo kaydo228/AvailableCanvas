@@ -28,15 +28,11 @@ export const setPublic = async (projectId: Id, isPublic: boolean): Promise<boole
   const cloud = getCloud();
   if (!cloud) return false;
 
-  // `.select()` — не украшение: `update` без него отвечает успехом и на ноль
-  // затронутых строк (правило доступа отсеяло чужую доску, строки ещё нет на
-  // сервере), а интерфейс рапортовал бы «опубликовано» при неизменном флаге.
-  const { data, error } = await cloud
-    .from('projects')
-    .update({ is_public: isPublic })
-    .eq('id', projectId)
-    .select('id');
-  if (error || data?.length !== 1) return false;
+  const { data, error } = await cloud.rpc('set_project_public', {
+    p_project_id: projectId,
+    p_is_public: isPublic,
+  });
+  if (error || data !== true) return false;
 
   const state = await readSyncState(projectId);
   await writeSyncState({ projectId, dirty: false, ...state, isPublic });

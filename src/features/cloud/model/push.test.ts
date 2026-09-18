@@ -29,11 +29,29 @@ const states = vi.hoisted(() => ({
 }));
 vi.mock('@/features/persistence/syncStore', () => states);
 
-const upsert = vi.fn(async () => ({ error: null }));
+const images = vi.hoisted(() => ({ uploadImages: vi.fn(async () => true) }));
+vi.mock('./images', () => images);
+
+const rpc = vi.fn(
+  async (): Promise<{
+    data: { revision: number; updated_at: string; updated_by: string }[] | null;
+    error: unknown;
+  }> => ({
+    data: [
+      {
+        revision: 1,
+        updated_at: new Date(100).toISOString(),
+        updated_by: 'user-1',
+      },
+    ],
+    error: null,
+  }),
+);
 const deleteEq = vi.fn(async () => ({ error: null }));
 const stubCloud = () =>
   setCloud({
-    from: () => ({ upsert, delete: () => ({ eq: deleteEq }) }),
+    rpc,
+    from: () => ({ delete: () => ({ eq: deleteEq }) }),
   } as never);
 
 beforeEach(() => {
@@ -76,7 +94,87 @@ describe('toRow', () => {
 describe('pushProject: согласие и владелец', () => {
   it('доска без записи синхронизации уезжает на сервер', async () => {
     expect(await pushProject('p1', 'user-1')).toBe(true);
-    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith(
+      'save_project',
+      expect.objectContaining({ p_project_id: 'p1' }),
+    );
+    expect(images.uploadImages).toHaveBeenCalledWith(expect.anything(), 'p1');
+    expect(states.writeSyncState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        owner: 'user-1',
+        access: 'owner',
+        remoteRevision: 1,
+        dirty: false,
+      }),
+    );
+  });
+
+  it('editor сохраняет новую ревизию, не становясь владельцем', async () => {
+    states.readSyncState.mockResolvedValue({
+      projectId: 'p1',
+      owner: 'owner-1',
+      access: 'editor',
+      remoteRevision: 3,
+      dirty: true,
+    });
+    rpc.mockResolvedValueOnce({
+      data: [
+        {
+          revision: 4,
+          updated_at: new Date(100).toISOString(),
+          updated_by: 'editor-1',
+        },
+      ],
+      error: null,
+    });
+
+    expect(await pushProject('p1', 'editor-1')).toBe(true);
+    expect(states.writeSyncState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: 'owner-1',
+        access: 'editor',
+        remoteRevision: 4,
+        dirty: false,
+      }),
+    );
+  });
+
+  it('viewer не загружает картинки и не вызывает RPC', async () => {
+    states.readSyncState.mockResolvedValue({
+      projectId: 'p1',
+      owner: 'owner-1',
+      access: 'viewer',
+      remoteRevision: 3,
+      dirty: true,
+    });
+
+    expect(await pushProject('p1', 'viewer-1')).toBe(false);
+    expect(images.uploadImages).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('ошибка RPC сохраняет прежнюю серверную ревизию', async () => {
+    states.readSyncState.mockResolvedValue({
+      projectId: 'p1',
+      owner: 'owner-1',
+      access: 'editor',
+      remoteUpdatedAt: 50,
+      remoteRevision: 3,
+      dirty: true,
+    });
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'offline' } });
+
+    expect(await pushProject('p1', 'editor-1')).toBe(false);
+    expect(states.writeSyncState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: 'owner-1',
+        access: 'editor',
+        remoteUpdatedAt: 50,
+        remoteRevision: 3,
+        dirty: true,
+      }),
+    );
   });
 
   it('на вопрос о переносе ответили отказом — доска не уезжает', async () => {
@@ -85,7 +183,7 @@ describe('pushProject: согласие и владелец', () => {
     states.readSyncState.mockResolvedValue({ projectId: 'p1', dirty: false, declined: true });
 
     expect(await pushProject('p1', 'user-1')).toBe(false);
-    expect(upsert).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
     expect(states.writeSyncState).not.toHaveBeenCalled();
   });
 
@@ -93,7 +191,7 @@ describe('pushProject: согласие и владелец', () => {
     states.readSyncState.mockResolvedValue({ projectId: 'p1', dirty: false, owner: 'user-2' });
 
     expect(await pushProject('p1', 'user-1')).toBe(false);
-    expect(upsert).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
     expect(states.writeSyncState).not.toHaveBeenCalled();
   });
 });
