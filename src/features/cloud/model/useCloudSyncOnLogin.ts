@@ -52,6 +52,7 @@ import { useProjectDialogs } from '@/features/projects/dialogsStore';
 import type { Id } from '@/shared/types/document';
 
 import { adoptable } from './adopt';
+import { acceptMyProjectInvites } from './members';
 import { localBoards, syncNow } from './pull';
 import { useSession } from './session';
 
@@ -99,10 +100,14 @@ export const useCloudSyncOnLogin = (): void => {
       syncedFor.current = null;
       return;
     }
+    // Экран приглашения сам принимает invite, синхронизирует доску и лишь
+    // затем открывает её. Параллельный круг здесь украл бы id принятого проекта.
+    if (window.location.pathname.endsWith('/invite')) return;
     if (syncedFor.current === userId) return;
     syncedFor.current = userId;
 
     void (async () => {
+      await acceptMyProjectInvites();
       const ids = adoptable(await localBoards());
       // Круг стартует независимо от того, есть ли вопрос — считать его
       // здесь, а не внутри `if`, чтобы промис существовал ДО того, как
