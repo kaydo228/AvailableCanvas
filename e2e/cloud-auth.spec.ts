@@ -82,3 +82,17 @@ test('вход показывает почту и «Выйти», выход в�
   await expect(header.getByRole('button', { name: 'Войти' })).toBeVisible();
   await expect(header.getByRole('button', { name: 'Выйти' })).toHaveCount(0);
 });
+
+test('регистрация сообщает, что дальше нужно подтвердить почту', async ({ page }) => {
+  await page.addInitScript(stubCloudClient);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Войти' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Ещё нет аккаунта? Регистрация' }).click();
+  await dialog.getByLabel('Почта').fill('new@example.com');
+  await dialog.getByLabel('Пароль').fill('secret123');
+  await dialog.getByRole('button', { name: 'Зарегистрироваться' }).click();
+
+  await expect(page.locator('[data-sonner-toast]')).toContainText(/Проверьте почту/);
+});
