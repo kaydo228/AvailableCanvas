@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // GitHub Pages не знает о маршрутах SPA. Для project pages первый
+      // сегмент URL — имя репозитория, его оставляем базой сайта.
+      var segments = window.location.pathname.split('/');
+      var base = '/' + segments[1];
+      var route = '/' + segments.slice(2).join('/') + window.location.search + window.location.hash;
+      window.location.replace(base + '/?redirect=' + encodeURIComponent(route));
+    </script>
+  </head>
+  <body></body>
+</html>

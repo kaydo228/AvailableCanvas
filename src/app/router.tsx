@@ -4,7 +4,7 @@
  */
 
 import { lazy, Suspense } from 'react';
-import { HashRouter, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { ProjectsHeader } from '@/app/ProjectsHeader';
 import { AdoptDialog, useCloudSyncOnLogin } from '@/features/cloud';
@@ -50,7 +50,7 @@ export function Router() {
   useCloudSyncOnLogin();
 
   return (
-    <HashRouter>
+    <BrowserRouter>
       {/*
         Тостер в корне, а не внутри ProjectDialogs или CanvasScreen: те
         рендерятся каждый на своём маршруте, и на холсте ошибки уходили
@@ -87,6 +87,6 @@ export function Router() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   );
 }
