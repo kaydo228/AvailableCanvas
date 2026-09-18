@@ -20,31 +20,9 @@ VITE_SUPABASE_ANON_KEY=your-anonKey-here
 
 ## Таблицы и правила доступа
 
-Создайте таблицу в SQL Editor проекта Supabase. Доска — это одна строка, документ целиком
-хранится в колонке `document` (JSON), `thumbnail` содержит превью для списка проектов.
-
-```sql
-create table public.projects (
-  id          text primary key,
-  owner       uuid not null references auth.users on delete cascade,
-  name        text not null,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null,
-  thumbnail   text,
-  document    jsonb not null,
-  is_public   boolean not null default false
-);
-
-alter table public.projects enable row level security;
-
-create policy "владелец видит своё, остальные — только публичное"
-  on public.projects for select
-  using (owner = auth.uid() or is_public);
-
-create policy "писать может только владелец"
-  on public.projects for all
-  using (owner = auth.uid()) with check (owner = auth.uid());
-```
+Откройте [supabase/schema.sql](../supabase/schema.sql), скопируйте его целиком в SQL Editor
+проекта Supabase и нажмите **Run**. Доска — это одна строка, документ целиком хранится в
+колонке `document` (JSON), `thumbnail` содержит превью для списка проектов.
 
 **Колонки:**
 - `id` — идентификатор доски, ставится клиентом (nanoid)
@@ -57,22 +35,8 @@ create policy "писать может только владелец"
 
 ## Хранилище изображений
 
-Создайте bucket `images` и настройте доступ. Картинки хранятся по пути `owner/blobId` —
-и писать, и читать свою папку может только владелец.
-
-```sql
-insert into storage.buckets (id, name, public)
-values ('images', 'images', true)
-on conflict (id) do nothing;
-
-create policy "владелец пишет в свою папку"
-  on storage.objects for insert to authenticated
-  with check (bucket_id = 'images' and (storage.foldername(name))[1] = auth.uid()::text);
-
-create policy "владелец читает свою папку"
-  on storage.objects for select to authenticated
-  using (bucket_id = 'images' and (storage.foldername(name))[1] = auth.uid()::text);
-```
+Скрипт также создаёт bucket `images` и правила доступа. Картинки хранятся по
+пути `owner/blobId` — и писать, и читать свою папку может только владелец.
 
 **Как это работает:**
 - Клиент выгружает картинку с путём `uuid-пользователя/blobId.png`
