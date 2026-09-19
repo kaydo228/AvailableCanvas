@@ -4,7 +4,7 @@
 
 **Goal:** Show the authenticated people who currently have the same remote project open.
 
-**Architecture:** A focused React hook owns one private Supabase Presence channel and converts connection-level Presence state into a deduplicated user list. A small header component renders that list. A database migration authorizes Presence only when `private.can_view_project` permits the authenticated user to access the project encoded in the topic.
+**Architecture:** A focused React hook owns one private Supabase Presence channel and converts connection-level Presence state into a deduplicated user list. A small header component renders that list. A database migration authorizes Presence only when the authenticated user owns or belongs to the project encoded in the topic.
 
 **Tech Stack:** React 19, TypeScript, Supabase Realtime Presence, PostgreSQL RLS, Vitest, Testing Library
 
@@ -107,7 +107,7 @@ Commit with message `Show online project participants`.
 - Modify: `supabase/tests/database/project_collaboration.test.sql`
 
 **Interfaces:**
-- Consumes: topic format `project-presence:<projectId>` and existing `private.can_view_project(text, uuid)`.
+- Consumes: topic format `project-presence:<projectId>` and existing `private.is_project_owner(text, uuid)` and `private.project_role_for(text, uuid)`.
 - Produces: `project_presence_select` and `project_presence_insert` RLS policies on `realtime.messages`.
 
 - [ ] **Step 1: Add failing database assertions**
@@ -116,17 +116,17 @@ Assert the two policies exist, target Presence, and call the project-access pred
 
 - [ ] **Step 2: Run the database test to verify RED**
 
-Run: `npm run test:db`
+Run: `./node_modules/.bin/supabase test db`
 
 Expected: FAIL because the Presence policies do not exist.
 
 - [ ] **Step 3: Add the migration and mirror it in schema.sql**
 
-Create one `select` policy for receiving Presence and one `insert` policy for tracking Presence. Both require `extension = 'presence'`, a `project-presence:` topic, and `private.can_view_project` for the suffix project id and `auth.uid()`.
+Create one `select` policy for receiving Presence and one `insert` policy for tracking Presence. Both require `extension = 'presence'`, a `project-presence:` topic, and owner or member access for the suffix project id and `auth.uid()`.
 
 - [ ] **Step 4: Run database tests to verify GREEN**
 
-Run: `npm run test:db`
+Run: `./node_modules/.bin/supabase test db`
 
 Expected: PASS.
 
@@ -137,4 +137,3 @@ Run: `npm run check`
 Expected: typecheck, lint, unit tests, build, and e2e all pass.
 
 Commit with message `Authorize project presence channels`.
-

@@ -24,4 +24,3 @@ Show authenticated participants who currently have the same remote project open.
 - No new package and no persistent online-status table.
 - No cursors, activity timestamps, or offline history.
 - Existing project update and access-revocation channels remain unchanged.
-
