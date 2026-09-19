@@ -279,6 +279,7 @@ const stubCollaborationCloud = (options: StubOptions) => {
           revision,
           updated_by: actor.id,
         };
+        harness.emitProjectUpdate(projectId, projects[projectId]);
         return { data: [{ revision, updated_at: updatedAt, updated_by: actor.id }], error: null };
       }
       return { data: null, error: { message: 'unknown rpc' } };
@@ -709,22 +710,6 @@ test('собственная revision не перезагружает докум
       { timeout: 5000 },
     )
     .toBe(1);
-
-  await page.evaluate(() => {
-    const current = window.__collaboration.projects['shared-1'];
-    if (!current) throw new Error('missing project');
-    window.__collaboration.emitProjectUpdate('shared-1', {
-      ...current,
-      revision: Number(current.revision) + 1,
-      updated_at: '2026-09-18T12:00:00.000Z',
-      updated_by: 'editor-1',
-      document: {
-        ...(current.document as Record<string, unknown>),
-        nodes: {},
-        order: [],
-      },
-    });
-  });
 
   await expect
     .poll(() => page.evaluate(() => Object.keys(window.__board.getState().document?.nodes ?? {})))
