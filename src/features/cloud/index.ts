@@ -10,6 +10,11 @@ export {
   type PendingInvite,
   removeMember,
 } from './model/members';
+export {
+  type OnlineParticipant,
+  participantsFromPresence,
+  useProjectPresence,
+} from './model/presence';
 export { deleteRemote, type ProjectRow, pushProject, rowUpdatedAt, toRow } from './model/push';
 export { useProjectRealtime } from './model/realtime';
 export {
