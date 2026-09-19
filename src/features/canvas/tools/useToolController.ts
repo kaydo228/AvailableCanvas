@@ -31,7 +31,7 @@ const CREATING = new Set([
   'pen',
 ]);
 
-export function useToolController() {
+export function useToolController(enabled = true) {
   const activeTool = useBoardStore((s) => s.activeTool);
   const viewport = useBoardStore((s) => s.document?.viewport);
   const addNode = useBoardStore((s) => s.addNode);
@@ -48,8 +48,8 @@ export function useToolController() {
   // это не будущий узел, а временная геометрия.
   const [marquee, setMarquee] = useState<Rect | null>(null);
 
-  const drawing = activeTool === 'pen';
-  const creating = CREATING.has(activeTool);
+  const drawing = enabled && activeTool === 'pen';
+  const creating = enabled && CREATING.has(activeTool);
 
   const pointerWorld = useCallback(
     (stage: Konva.Stage | null): WorldPoint | null => {
@@ -89,6 +89,7 @@ export function useToolController() {
 
   const onMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!enabled) return;
       // Клик по пустому месту снимает выделение — но только инструментом
       // «Выбор», иначе создание узла заодно гасило бы выделение зря.
       if (!creating) {
@@ -106,11 +107,12 @@ export function useToolController() {
       start.current = point;
       if (drawing) drawPoints.current = [point];
     },
-    [activeTool, clearSelection, creating, drawing, pointerWorld],
+    [activeTool, clearSelection, creating, drawing, enabled, pointerWorld],
   );
 
   const onMouseMove = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!enabled) return;
       if (!start.current) return;
       const point = pointerWorld(event.target.getStage());
       if (!point) return;
@@ -137,11 +139,12 @@ export function useToolController() {
         selectInBox(box);
       }
     },
-    [activeTool, build, creating, drawing, pointerWorld, selectInBox, viewport?.zoom],
+    [activeTool, build, creating, drawing, enabled, pointerWorld, selectInBox, viewport?.zoom],
   );
 
   const onMouseUp = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!enabled) return;
       const from = start.current;
       start.current = null;
       setPreview(null);
@@ -190,6 +193,7 @@ export function useToolController() {
       build,
       creating,
       drawing,
+      enabled,
       pointerWorld,
       select,
       setTool,

@@ -8,11 +8,8 @@
  * синхронизации здесь нет намеренно: экран только показывает. Выгрузка
  * (`ExportMenu`) есть — она читает доску и ничего в ней не меняет.
  *
- * «Только просмотр» ниже — честная оговорка, а не защита: `draggable` живёт
- * в `features/canvas/nodes/NodesLayer.tsx` (зона A), и запрет трогать чужую
- * зону не даёт выключить перетаскивание отсюда. Правки мышью никуда не
- * сохраняются — `useAutosave` на этом экране не смонтирован, — но узел
- * подвинуть можно. Запрос на флаг «только чтение» — в docs/CONTRACT-REQUESTS.md.
+ * Сам CanvasStage получает `readOnly`: это блокирует не только сохранение,
+ * но и локальные drag/edit/drop/shortcut-изменения документа.
  */
 
 import { useEffect, useState } from 'react';
@@ -20,6 +17,7 @@ import { Link, useParams } from 'react-router';
 
 import { CanvasStage } from '@/features/canvas/engine/CanvasStage';
 import { loadPublicBoard } from '@/features/cloud';
+import { connectRemoteImages } from '@/features/cloud/model/images';
 import { ExportMenu } from '@/features/export';
 import { useBoardStore } from '@/shared/store/board';
 
@@ -40,6 +38,7 @@ export function PublicBoardScreen() {
 
     let cancelled = false;
     setState('loading');
+    connectRemoteImages(projectId);
 
     void loadPublicBoard(projectId)
       .then((board) => {
@@ -64,6 +63,7 @@ export function PublicBoardScreen() {
       // Документ обязан уйти из стора вместе с экраном — иначе он на
       // мгновение виден следующему открытому (уже своему) проекту.
       closeDocument();
+      connectRemoteImages(null);
     };
   }, [projectId, loadDocument, closeDocument]);
 
@@ -101,7 +101,7 @@ export function PublicBoardScreen() {
           <ExportMenu name={name} />
         </span>
       </div>
-      <CanvasStage />
+      <CanvasStage readOnly />
     </div>
   );
 }

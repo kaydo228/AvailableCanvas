@@ -59,8 +59,9 @@ export const parseClipboard = (text: string): Node[] | null => {
 export const serializeNodes = (nodes: Node[]): string =>
   JSON.stringify({ format: FORMAT, version: 1, nodes });
 
-export const useClipboard = (): void => {
+export const useClipboard = (enabled = true): void => {
   useEffect(() => {
+    if (!enabled) return;
     const board = useBoardStore;
 
     // Каскад: вторая вставка того же буфера не должна лечь ровно на первую.
@@ -115,5 +116,5 @@ export const useClipboard = (): void => {
       window.removeEventListener('copy', onCopy);
       window.removeEventListener('paste', onPaste);
     };
-  }, []);
+  }, [enabled]);
 };

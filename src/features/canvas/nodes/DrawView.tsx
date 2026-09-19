@@ -9,7 +9,7 @@ import type { DrawNode } from '@/shared/types/document';
 
 const SELECTION_STROKE = '#2f6fed';
 
-function DrawViewInner({ node, selected, onSelect, onDragEnd }: NodeViewProps<DrawNode>) {
+function DrawViewInner({ node, selected, readOnly, onSelect, onDragEnd }: NodeViewProps<DrawNode>) {
   const arrow = arrowHeadPoints(node.points, node.strokeWidth);
 
   return (
@@ -20,7 +20,7 @@ function DrawViewInner({ node, selected, onSelect, onDragEnd }: NodeViewProps<Dr
       y={node.y}
       rotation={node.rotation}
       opacity={node.opacity}
-      draggable={!node.locked}
+      draggable={!readOnly && !node.locked}
       onClick={(event: Konva.KonvaEventObject<MouseEvent>) => {
         event.cancelBubble = true;
         onSelect(node.id, event.evt.shiftKey);

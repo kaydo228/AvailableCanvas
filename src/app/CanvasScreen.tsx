@@ -13,7 +13,8 @@ import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
 import { AccessBadge, ShareButton, useCloudSync } from '@/features/cloud';
-import type { ProjectAccess } from '@/features/cloud/model/access';
+import { canEdit, type ProjectAccess } from '@/features/cloud/model/access';
+import { connectRemoteImages } from '@/features/cloud/model/images';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
@@ -40,6 +41,7 @@ export function CanvasScreen() {
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>(undefined);
   const canvasRef = useRef<CanvasStageHandle>(null);
+  const editable = state !== undefined && state !== null && canEdit(state.access);
 
   const loadDocument = useBoardStore((s) => s.loadDocument);
   const closeDocument = useBoardStore((s) => s.closeDocument);
@@ -51,18 +53,18 @@ export function CanvasScreen() {
   );
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
-  useAutosave();
+  useAutosave(editable);
 
   // Выгрузка на сервер (задача 4 cloud-sync). Свой дебаунс 3000 мс поверх
   // уже сохранённого документа — не привязан к автосохранению.
-  useCloudSync(projectId, state?.access);
+  useCloudSync(projectId, editable ? state?.access : undefined);
 
   // История отмен (FR-10). Своя у каждого проекта, чистится на входе и выходе.
   useHistorySession();
 
   // Горячие клавиши (6.2, 6.3). Живут только на холсте: в списке проектов
   // буква «S» должна печататься в поиске, а не ставить стикер.
-  useShortcuts();
+  useShortcuts(editable);
 
   useEffect(() => {
     if (!projectId) {
@@ -72,6 +74,7 @@ export function CanvasScreen() {
 
     let cancelled = false;
     setState(undefined);
+    connectRemoteImages(projectId);
 
     const open = async () => {
       const [project, stored, sync] = await Promise.all([
@@ -133,6 +136,7 @@ export function CanvasScreen() {
       // Object URL'ы картинок живут до явного отзыва — иначе они копятся
       // за всю сессию по всем открытым доскам.
       releaseImageCache();
+      connectRemoteImages(null);
     };
   }, [projectId, loadDocument, closeDocument]);
 
@@ -180,7 +184,7 @@ export function CanvasScreen() {
 
         <span className="min-w-0 truncate font-medium text-ink text-sm">{state.name}</span>
         <AccessBadge access={state.access} />
-        <SaveIndicator />
+        {editable && <SaveIndicator />}
 
         <div className="ml-auto flex items-center gap-1.5">
           <ThemeToggle />
@@ -193,10 +197,14 @@ export function CanvasScreen() {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 overflow-hidden">
-          <Toolbar />
-          <CanvasStage ref={canvasRef} onThumbnail={saveThumbnail} />
+          {editable && <Toolbar />}
+          <CanvasStage
+            ref={canvasRef}
+            readOnly={!editable}
+            {...(editable ? { onThumbnail: saveThumbnail } : {})}
+          />
         </div>
-        <InspectorPanel />
+        {editable && <InspectorPanel />}
       </div>
 
       <HelpDialog />

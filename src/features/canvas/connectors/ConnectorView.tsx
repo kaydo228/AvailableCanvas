@@ -58,6 +58,7 @@ function ArrowCap({
 function ConnectorViewInner({
   node,
   selected,
+  readOnly,
   editing,
   onSelect,
   onStartEditing,
@@ -111,6 +112,7 @@ function ConnectorViewInner({
         strokeWidth={HIT_WIDTH}
         onDblClick={(event) => {
           event.cancelBubble = true;
+          if (readOnly) return;
           onStartEditing(node.id);
         }}
       />

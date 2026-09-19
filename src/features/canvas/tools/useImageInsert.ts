@@ -21,6 +21,8 @@ import { createImageNode } from './imageTool';
 const CASCADE_STEP = 24;
 
 export interface ImageInsertOptions {
+  /** Разрешена ли вставка вообще (viewer/public остаются только для чтения). */
+  enabled?: boolean;
   /**
    * Вешать ли глобальный слушатель Cmd/Ctrl+V.
    *
@@ -32,7 +34,7 @@ export interface ImageInsertOptions {
   paste?: boolean;
 }
 
-export function useImageInsert({ paste = false }: ImageInsertOptions = {}) {
+export function useImageInsert({ enabled = true, paste = false }: ImageInsertOptions = {}) {
   const addNode = useBoardStore((s) => s.addNode);
   const select = useBoardStore((s) => s.select);
   const setTool = useBoardStore((s) => s.setTool);
@@ -48,6 +50,7 @@ export function useImageInsert({ paste = false }: ImageInsertOptions = {}) {
 
   const insertFiles = useCallback(
     async (files: File[], at?: WorldPoint) => {
+      if (!enabled) return;
       const images = files.filter((file) => file.type.startsWith('image/'));
       if (images.length === 0) {
         if (files.length > 0) {
@@ -81,11 +84,12 @@ export function useImageInsert({ paste = false }: ImageInsertOptions = {}) {
       // Инструмент возвращается к «Выбору», как и у остальных типов.
       if (inserted > 0) setTool('select');
     },
-    [addNode, centerOfView, select, setTool],
+    [addNode, centerOfView, enabled, select, setTool],
   );
 
   /** Кнопка на панели: системный диалог выбора файла. */
   const pickFile = useCallback(() => {
+    if (!enabled) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,image/gif,image/svg+xml,image/webp';
@@ -94,21 +98,26 @@ export function useImageInsert({ paste = false }: ImageInsertOptions = {}) {
       void insertFiles(Array.from(input.files ?? []));
     };
     input.click();
-  }, [insertFiles]);
+  }, [enabled, insertFiles]);
 
   /** Перетаскивание файла на холст. */
   const hostRef = useRef<HTMLElement | null>(null);
 
-  const onDragOver = useCallback((event: React.DragEvent) => {
-    if (event.dataTransfer.types.includes('Files')) {
-      // Без preventDefault браузер откроет файл в соседней вкладке.
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'copy';
-    }
-  }, []);
+  const onDragOver = useCallback(
+    (event: React.DragEvent) => {
+      if (!enabled) return;
+      if (event.dataTransfer.types.includes('Files')) {
+        // Без preventDefault браузер откроет файл в соседней вкладке.
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+      }
+    },
+    [enabled],
+  );
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
+      if (!enabled) return;
       const files = Array.from(event.dataTransfer.files ?? []);
       if (files.length === 0) return;
       event.preventDefault();
@@ -124,7 +133,7 @@ export function useImageInsert({ paste = false }: ImageInsertOptions = {}) {
 
       void insertFiles(files, toWorld(point, viewport));
     },
-    [insertFiles],
+    [enabled, insertFiles],
   );
 
   /**
@@ -134,7 +143,7 @@ export function useImageInsert({ paste = false }: ImageInsertOptions = {}) {
    * Во время ввода текста не перехватываем: там вставляют текст.
    */
   useEffect(() => {
-    if (!paste) return;
+    if (!enabled || !paste) return;
 
     const onPaste = (event: ClipboardEvent) => {
       if (editingNodeId) return;
@@ -151,7 +160,7 @@ export function useImageInsert({ paste = false }: ImageInsertOptions = {}) {
 
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [editingNodeId, insertFiles, paste]);
+  }, [editingNodeId, enabled, insertFiles, paste]);
 
   return { pickFile, onDragOver, onDrop, hostRef, insertFiles };
 }

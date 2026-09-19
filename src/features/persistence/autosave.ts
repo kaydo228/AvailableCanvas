@@ -85,8 +85,12 @@ const stale = (status: SaveStatus): boolean => status === 'conflict' || status =
  * Возврат из хука не нужен: состояние индикатора читается через `useSaveStatus`,
  * иначе каждый рендер холста тянул бы за собой перерисовку индикатора.
  */
-export const useAutosave = (): void => {
+export const useAutosave = (enabled = true): void => {
   useEffect(() => {
+    if (!enabled) {
+      useSaveStatus.getState().setStatus('idle');
+      return;
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     const setStatus = useSaveStatus.getState().setStatus;
 
@@ -179,5 +183,5 @@ export const useAutosave = (): void => {
       }
       useSaveStatus.getState().setStatus('idle');
     };
-  }, []);
+  }, [enabled]);
 };

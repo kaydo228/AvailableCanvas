@@ -62,6 +62,7 @@ const BACKGROUND_RADIUS = 4;
 function TextViewInner({
   node,
   selected,
+  readOnly,
   onSelect,
   onStartEditing,
   onDragEnd,
@@ -127,10 +128,12 @@ function TextViewInner({
       y={node.y}
       rotation={node.rotation}
       opacity={node.opacity}
-      draggable={!node.locked && !editing}
+      draggable={!readOnly && !node.locked && !editing}
       onDragEnd={(event) => onDragEnd(node.id, event.target.x(), event.target.y())}
       onClick={(event) => onSelect(node.id, event.evt.shiftKey)}
-      onDblClick={() => onStartEditing(node.id)}
+      onDblClick={() => {
+        if (!readOnly) onStartEditing(node.id);
+      }}
     >
       {/*
         Прямоугольник рамки — единственная область попадания узла и заодно

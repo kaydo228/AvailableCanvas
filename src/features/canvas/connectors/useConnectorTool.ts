@@ -35,7 +35,7 @@ export interface AnchorHint {
   active: SideAnchor | null;
 }
 
-export function useConnectorTool() {
+export function useConnectorTool(enabled = true) {
   const activeTool = useBoardStore((s) => s.activeTool);
   const connect = useBoardStore((s) => s.connect);
   const select = useBoardStore((s) => s.select);
@@ -46,7 +46,7 @@ export function useConnectorTool() {
   const [draft, setDraft] = useState<ConnectorDraft | null>(null);
   const [hint, setHint] = useState<AnchorHint | null>(null);
 
-  const active = activeTool === 'connector';
+  const active = enabled && activeTool === 'connector';
 
   const pointerWorld = useCallback((stage: Konva.Stage | null): WorldPoint | null => {
     const pointer = stage?.getPointerPosition();
