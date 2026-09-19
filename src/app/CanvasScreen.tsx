@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
-import { AccessBadge, ShareButton, useCloudSync } from '@/features/cloud';
+import { AccessBadge, ShareButton, useCloudSync, useProjectRealtime } from '@/features/cloud';
 import { canEdit, type ProjectAccess } from '@/features/cloud/model/access';
 import { connectRemoteImages } from '@/features/cloud/model/images';
 import { ExportMenu } from '@/features/export';
@@ -34,14 +34,23 @@ import { useBoardStore } from '@/shared/store/board';
 import { ThemeToggle } from '@/shared/ui';
 
 /** `undefined` — ещё грузим, `null` — такого проекта нет. */
-type LoadState = { name: string; access: ProjectAccess; isPublic: boolean } | null | undefined;
+type LoadState =
+  | {
+      name: string;
+      access: ProjectAccess;
+      isPublic: boolean;
+      remote: boolean;
+      revoked: boolean;
+    }
+  | null
+  | undefined;
 
 export function CanvasScreen() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>(undefined);
   const canvasRef = useRef<CanvasStageHandle>(null);
-  const editable = state !== undefined && state !== null && canEdit(state.access);
+  const editable = state !== undefined && state !== null && !state.revoked && canEdit(state.access);
 
   const loadDocument = useBoardStore((s) => s.loadDocument);
   const closeDocument = useBoardStore((s) => s.closeDocument);
@@ -51,6 +60,21 @@ export function CanvasScreen() {
     },
     [projectId],
   );
+  const updateRemoteName = useCallback((name: string) => {
+    setState((current) =>
+      current === undefined || current === null ? current : { ...current, name },
+    );
+  }, []);
+  const handleRevoked = useCallback(() => {
+    setState((current) =>
+      current === undefined || current === null ? current : { ...current, revoked: true },
+    );
+    toast.error('Доступ к проекту отозван', {
+      description: 'Доску ещё можно экспортировать, пока эта страница открыта.',
+      duration: Number.POSITIVE_INFINITY,
+      id: 'project-access-revoked',
+    });
+  }, []);
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
   useAutosave(editable);
@@ -66,6 +90,13 @@ export function CanvasScreen() {
   // буква «S» должна печататься в поиске, а не ставить стикер.
   useShortcuts(editable);
 
+  useProjectRealtime({
+    ...(state?.remote && !state.revoked && projectId ? { projectId } : {}),
+    ...(state !== undefined && state !== null && !state.revoked ? { access: state.access } : {}),
+    onName: updateRemoteName,
+    onRevoked: handleRevoked,
+  });
+
   useEffect(() => {
     if (!projectId) {
       setState(null);
@@ -74,7 +105,6 @@ export function CanvasScreen() {
 
     let cancelled = false;
     setState(undefined);
-    connectRemoteImages(projectId);
 
     const open = async () => {
       const [project, stored, sync] = await Promise.all([
@@ -112,6 +142,8 @@ export function CanvasScreen() {
       // потом сверяется с этим значением и не затирает чужую работу молча.
       beginSaveSession(project.id, openedAt);
 
+      if (sync?.owner) connectRemoteImages(projectId);
+
       loadDocument(document);
       // Открытие проекта — не действие пользователя. Без явной чистки первый
       // Cmd+Z откатывал бы саму загрузку: доска на секунду становилась пустой.
@@ -120,6 +152,8 @@ export function CanvasScreen() {
         name: project.name,
         access: sync?.access ?? 'owner',
         isPublic: sync?.isPublic ?? false,
+        remote: sync?.owner !== undefined && sync.remoteRevision !== undefined,
+        revoked: false,
       });
     };
 
@@ -183,12 +217,18 @@ export function CanvasScreen() {
         <span className="h-4 w-px shrink-0 bg-rule" aria-hidden="true" />
 
         <span className="min-w-0 truncate font-medium text-ink text-sm">{state.name}</span>
-        <AccessBadge access={state.access} />
+        {state.revoked ? (
+          <span className="rounded-full border border-signal/30 bg-signal/10 px-2 py-0.5 font-mono text-signal text-micro">
+            Доступ отозван
+          </span>
+        ) : (
+          <AccessBadge access={state.access} />
+        )}
         {editable && <SaveIndicator />}
 
         <div className="ml-auto flex items-center gap-1.5">
           <ThemeToggle />
-          {projectId && (
+          {projectId && !state.revoked && (
             <ShareButton projectId={projectId} access={state.access} isPublic={state.isPublic} />
           )}
           <ExportMenu name={state.name} />

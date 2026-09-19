@@ -23,7 +23,7 @@ import { create } from 'zustand';
 
 import { saveDocument } from '@/features/persistence/projectsRepo';
 import { useBoardStore } from '@/shared/store/board';
-import type { Id } from '@/shared/types/document';
+import type { BoardDocument, Id } from '@/shared/types/document';
 import { subscribe } from './sync';
 
 export type SaveStatus =
@@ -62,6 +62,14 @@ export const AUTOSAVE_DELAY_MS = 500;
  * и она обязана быть свежей в момент записи, а не в момент рендера.
  */
 let session: { projectId: Id; updatedAt: number } | null = null;
+
+/** Следующая замена документа пришла с сервера и не является локальной правкой. */
+let ignoredDocument: BoardDocument | null = null;
+
+export const loadRemoteDocument = (document: BoardDocument): void => {
+  ignoredDocument = document;
+  useBoardStore.getState().loadDocument(document);
+};
 
 /**
  * Объявляет, с каким `updatedAt` вкладка открыла проект. Зовётся с экрана
@@ -143,6 +151,11 @@ export const useAutosave = (enabled = true): void => {
       const document = state.document;
       if (!document || document === previous.document) return;
 
+      if (document === ignoredDocument) {
+        ignoredDocument = null;
+        return;
+      }
+
       // Открытие проекта — это не правка. Без этой проверки каждый заход на
       // холст перезаписывал бы документ и двигал updatedAt, переставляя
       // проект в начало списка просто потому, что его открыли.
@@ -182,6 +195,7 @@ export const useAutosave = (enabled = true): void => {
         void flush();
       }
       useSaveStatus.getState().setStatus('idle');
+      ignoredDocument = null;
     };
   }, [enabled]);
 };

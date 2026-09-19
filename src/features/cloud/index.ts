@@ -11,6 +11,7 @@ export {
   removeMember,
 } from './model/members';
 export { deleteRemote, type ProjectRow, pushProject, rowUpdatedAt, toRow } from './model/push';
+export { useProjectRealtime } from './model/realtime';
 export {
   authErrorText,
   initSession,
