@@ -1,7 +1,7 @@
 # Приглашения и совместная работа над проектом
 
 **Дата:** 2026-09-18
-**Статус:** утверждено, ждёт плана реализации
+**Статус:** реализовано, ожидает production-развёртывания
 
 ## Зачем
 
@@ -240,14 +240,23 @@ Edge Functions. Адрес приложения хранится в `APP_URL`; �
   `local-only` по-прежнему видимы.
 - Полный `npm run check`; отдельные SQL-тесты выполняются через Supabase CLI.
 
-## Ручная настройка после реализации
+## Production-развёртывание
 
-1. Связать репозиторий с проектом `wfhxobnovnhsimnfnefb` через Supabase CLI.
-2. Применить миграцию базы.
-3. Добавить GitHub Pages URL в разрешённые Auth redirect URLs.
-4. Задать Edge Function secret `APP_URL` равным адресу приложения.
-5. Задеплоить `invite-project-member`.
-6. Убедиться, что `projects` включена в Realtime publication.
+```bash
+npx supabase link --project-ref wfhxobnovnhsimnfnefb
+npx supabase db push
+npx supabase secrets set APP_URL=https://kaydo228.github.io/AvailableCanvas/
+npx supabase functions deploy invite-project-member --project-ref wfhxobnovnhsimnfnefb
+```
+
+В **Authentication → URL Configuration → Redirect URLs** нужно добавить
+`https://kaydo228.github.io/AvailableCanvas/invite`.
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` и `SUPABASE_SERVICE_ROLE_KEY` Edge Function
+получает автоматически. Они не копируются в GitHub Pages; серверный
+`SUPABASE_SERVICE_ROLE_KEY` ни при каких условиях не должен попасть во фронтенд.
+В GitHub Actions для клиентской сборки остаются только `VITE_SUPABASE_URL` и
+`VITE_SUPABASE_ANON_KEY`.
 
 ## Не входит в эту версию
 
