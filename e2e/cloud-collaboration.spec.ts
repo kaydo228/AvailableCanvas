@@ -48,6 +48,7 @@ interface StubOptions {
   projects?: CollaborationProjectRow[];
   members?: CollaborationMember[];
   invites?: CollaborationInvite[];
+  online?: Actor[];
   registered?: Record<string, string>;
   failSaves?: boolean;
 }
@@ -66,7 +67,12 @@ const stubCollaborationCloud = (options: StubOptions) => {
   const registered = { ...options.registered };
   const channels = new Map<
     string,
-    { handlers: ChannelHandler[]; subscribeCallback?: (status: string) => void }
+    {
+      handlers: ChannelHandler[];
+      subscribeCallback?: (status: string) => void;
+      channel?: unknown;
+      presence: Record<string, Array<{ userId: string; email: string }>>;
+    }
   >();
 
   const projects = Object.fromEntries(
@@ -322,8 +328,20 @@ const stubCollaborationCloud = (options: StubOptions) => {
       };
     },
     channel: (name: string) => {
-      const state: { handlers: ChannelHandler[]; subscribeCallback?: (status: string) => void } = {
+      const presence = Object.fromEntries(
+        (options.online ?? []).map((online) => [
+          online.id,
+          [{ userId: online.id, email: online.email }],
+        ]),
+      );
+      const state: {
+        handlers: ChannelHandler[];
+        subscribeCallback?: (status: string) => void;
+        channel?: unknown;
+        presence: Record<string, Array<{ userId: string; email: string }>>;
+      } = {
         handlers: [],
+        presence,
       };
       channels.set(name, state);
       const channel = {
@@ -342,12 +360,25 @@ const stubCollaborationCloud = (options: StubOptions) => {
           }
           return channel;
         },
+        presenceState() {
+          return structuredClone(state.presence);
+        },
+        async track(payload: { userId: string; email: string }) {
+          state.presence[payload.userId] = [structuredClone(payload)];
+          for (const handler of state.handlers) {
+            if (handler.kind === 'presence' && handler.filter.event === 'sync') {
+              handler.callback({});
+            }
+          }
+          return 'ok';
+        },
       };
+      state.channel = channel;
       return channel;
     },
     removeChannel: async (channel: unknown) => {
       for (const [name, state] of channels) {
-        if (state === channel) channels.delete(name);
+        if (state.channel === channel) channels.delete(name);
       }
       return 'ok';
     },
@@ -599,6 +630,19 @@ test('viewer не меняет доску, но может двигать вид
     return window.__board.getState().document?.viewport;
   });
   expect(viewport).not.toEqual({ x: 0, y: 0, zoom: 1 });
+});
+
+test('шапка показывает участников, у которых открыт проект', async ({ page }) => {
+  await install(page, {
+    actor: actor('owner-1', 'owner@example.com'),
+    projects: [projectRow()],
+    online: [actor('owner-1', 'owner@example.com'), actor('editor-1', 'editor@example.com')],
+  });
+  await openProject(page);
+
+  await expect(page.getByRole('group', { name: 'В сети: 2' })).toBeVisible();
+  await expect(page.getByText('owner@example.com (Вы) — в сети')).toBeAttached();
+  await expect(page.getByText('editor@example.com — в сети')).toBeAttached();
 });
 
 test('editor редактирует и отправляет один save_project', async ({ page }) => {

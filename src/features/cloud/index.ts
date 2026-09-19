@@ -10,6 +10,11 @@ export {
   type PendingInvite,
   removeMember,
 } from './model/members';
+export {
+  type OnlineParticipant,
+  participantsFromPresence,
+  useProjectPresence,
+} from './model/presence';
 export { deleteRemote, type ProjectRow, pushProject, rowUpdatedAt, toRow } from './model/push';
 export { useProjectRealtime } from './model/realtime';
 export {
@@ -28,4 +33,5 @@ export { AccessBadge } from './ui/AccessBadge';
 export { AccessDialog } from './ui/AccessDialog';
 export { AccountMenu } from './ui/AccountMenu';
 export { AdoptDialog } from './ui/AdoptDialog';
+export { OnlineParticipants } from './ui/OnlineParticipants';
 export { ShareButton } from './ui/ShareButton';

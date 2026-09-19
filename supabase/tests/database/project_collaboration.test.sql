@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(30);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
@@ -107,6 +107,30 @@ select results_eq(
 );
 select ok(has_function_privilege('service_role', 'public.lookup_auth_user(text)', 'EXECUTE'), 'service role can look up auth users');
 select isnt(has_function_privilege('authenticated', 'public.lookup_auth_user(text)', 'EXECUTE'), true, 'browser cannot look up auth users');
+
+reset role;
+select results_eq(
+  $$ select cmd from pg_policies where schemaname = 'realtime' and tablename = 'messages' and policyname = 'project_presence_select' $$,
+  array['SELECT'::text],
+  'project presence has a read policy'
+);
+select results_eq(
+  $$ select cmd from pg_policies where schemaname = 'realtime' and tablename = 'messages' and policyname = 'project_presence_insert' $$,
+  array['INSERT'::text],
+  'project presence has a track policy'
+);
+select ok(
+  (select qual like '%extension%presence%is_project_owner%project_role_for%'
+   from pg_policies
+   where schemaname = 'realtime' and tablename = 'messages' and policyname = 'project_presence_select'),
+  'presence read requires project participation'
+);
+select ok(
+  (select with_check like '%extension%presence%is_project_owner%project_role_for%'
+   from pg_policies
+   where schemaname = 'realtime' and tablename = 'messages' and policyname = 'project_presence_insert'),
+  'presence tracking requires project participation'
+);
 
 select * from finish();
 rollback;
