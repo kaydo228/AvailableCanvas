@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'supabase/functions/**/*.test.ts'],
     env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
   },
   resolve: {

@@ -52,7 +52,7 @@ import { useProjectDialogs } from '@/features/projects/dialogsStore';
 import type { Id } from '@/shared/types/document';
 
 import { adoptable } from './adopt';
-import { connectRemoteImages } from './images';
+import { acceptMyProjectInvites } from './members';
 import { localBoards, syncNow } from './pull';
 import { useSession } from './session';
 
@@ -96,20 +96,18 @@ export const useCloudSyncOnLogin = (): void => {
   const syncedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    // Фолбэк на картинки, которых нет локально: этот хук — единственное
-    // место уровня приложения, которое всегда знает текущего userId, и он же
-    // должен сбросить источник в null при выходе — иначе после логаута
-    // хранилище продолжало бы ходить в сеть от имени уже вышедшего.
-    connectRemoteImages(userId);
-
     if (!userId) {
       syncedFor.current = null;
       return;
     }
+    // Экран приглашения сам принимает invite, синхронизирует доску и лишь
+    // затем открывает её. Параллельный круг здесь украл бы id принятого проекта.
+    if (window.location.pathname.endsWith('/invite')) return;
     if (syncedFor.current === userId) return;
     syncedFor.current = userId;
 
     void (async () => {
+      await acceptMyProjectInvites();
       const ids = adoptable(await localBoards());
       // Круг стартует независимо от того, есть ли вопрос — считать его
       // здесь, а не внутри `if`, чтобы промис существовал ДО того, как

@@ -23,6 +23,8 @@ interface Row {
   thumbnail: string | null;
   document: unknown;
   is_public: boolean;
+  revision?: number;
+  updated_by?: string | null;
 }
 
 /**
@@ -58,33 +60,60 @@ const stubCloudClient = ({ rows, failList = false }: { rows: Row[]; failList?: b
         return { error: null };
       },
     },
-    from: (_table: string) => ({
-      select: (_columns: string) => ({
-        eq: (column: string, value: string) => {
-          // remoteList: select('id, updated_at').eq('owner', owner) — без .single(), сразу thenable.
-          // Вызывается ровно раз на каждый syncNow — считаем как счётчик кругов синхронизации.
-          if (column === 'owner') {
-            window.__syncCalls += 1;
-            if (failList) {
-              return Promise.resolve({ data: null, error: { message: 'JWT expired' } });
-            }
-            const data = rows
-              .filter((row) => row.owner === value)
-              .map((row) => ({ id: row.id, updated_at: row.updated_at }));
-            return Promise.resolve({ data, error: null });
-          }
-          // pullProject: select('*').eq('id', projectId).single().
-          return {
-            single: async () => {
-              const row = rows.find((r) => r.id === value);
-              return row
-                ? { data: row, error: null }
-                : { data: null, error: { message: 'доски нет на сервере' } };
-            },
-          };
+    rpc: async (name: string) =>
+      name === 'accept_my_project_invites'
+        ? { data: [], error: null }
+        : { data: null, error: { message: 'unknown rpc' } },
+    from: (table: string) => {
+      if (table === 'project_members') {
+        return { select: () => ({ eq: async () => ({ data: [], error: null }) }) };
+      }
+      return {
+        select: (columns: string) => {
+          if (columns !== '*') window.__syncCalls += 1;
+          const list = failList
+            ? Promise.resolve({ data: null, error: { message: 'JWT expired' } })
+            : Promise.resolve({
+                data: rows.map((row) => ({
+                  id: row.id,
+                  owner: row.owner,
+                  updated_at: row.updated_at,
+                  revision: row.revision ?? 1,
+                })),
+                error: null,
+              });
+          return Object.assign(list, {
+            eq: (_column: string, value: string) => ({
+              single: async () => {
+                const row = rows.find((item) => item.id === value);
+                return row
+                  ? {
+                      data: {
+                        ...row,
+                        revision: row.revision ?? 1,
+                        updated_by: row.updated_by ?? row.owner,
+                      },
+                      error: null,
+                    }
+                  : { data: null, error: { message: 'доски нет на сервере' } };
+              },
+            }),
+          });
         },
-      }),
-    }),
+      };
+    },
+    channel: () => {
+      const channel = {
+        on: () => channel,
+        subscribe: (callback?: (status: string) => void) => {
+          callback?.('SUBSCRIBED');
+          return channel;
+        },
+      };
+      return channel;
+    },
+    removeChannel: async () => 'ok',
+    realtime: { setAuth: async () => {} },
   };
 
   Object.defineProperty(window, '__cloud', {

@@ -3,8 +3,9 @@
 import type { WorldPoint } from '@/features/canvas/engine/contract';
 import type { DrawNode } from '@/shared/types/document';
 
-export const DEFAULT_DRAW_STROKE = '#111111';
-export const DEFAULT_DRAW_WIDTH = 2;
+export const DEFAULT_DRAW_STROKE = '#f8fafc';
+export const DEFAULT_DRAW_WIDTH = 4;
+export const DEFAULT_DRAW_DASH = [12, 8];
 
 /** Меньше четырёх экранных пикселей — промах, а не стрелка. */
 export const MIN_DRAW_LENGTH = 4;
@@ -42,16 +43,33 @@ export const drawFromPoints = (points: WorldPoint[]): DrawNode | null => {
   };
 };
 
-/** Контур наконечника по последнему ненулевому отрезку свободной стрелки. */
+/** Контур наконечника по устойчивому конечному направлению свободной стрелки. */
 export const arrowHeadPoints = (points: number[], strokeWidth: number): number[] => {
   if (points.length < 4) return [];
   const endX = points[points.length - 2] as number;
   const endY = points[points.length - 1] as number;
+  const lookback = Math.max(24, strokeWidth * 6);
+  let distance = 0;
+  let cursorX = endX;
+  let cursorY = endY;
 
   for (let index = points.length - 4; index >= 0; index -= 2) {
-    const fromX = points[index] as number;
-    const fromY = points[index + 1] as number;
-    if (fromX === endX && fromY === endY) continue;
+    const previousX = points[index] as number;
+    const previousY = points[index + 1] as number;
+    const segmentLength = Math.hypot(cursorX - previousX, cursorY - previousY);
+    if (segmentLength === 0) continue;
+
+    const remaining = lookback - distance;
+    const ratio = Math.min(1, remaining / segmentLength);
+    const fromX = cursorX + (previousX - cursorX) * ratio;
+    const fromY = cursorY + (previousY - cursorY) * ratio;
+    distance += segmentLength;
+
+    if (distance < lookback && index > 0) {
+      cursorX = previousX;
+      cursorY = previousY;
+      continue;
+    }
 
     const angle = Math.atan2(endY - fromY, endX - fromX);
     const spread = Math.PI / 7;

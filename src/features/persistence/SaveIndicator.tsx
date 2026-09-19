@@ -1,6 +1,6 @@
 /** Индикатор состояния сохранения в шапке холста (FR-11, 6.1). */
 
-import { Check, CloudOff, Loader2, TriangleAlert } from 'lucide-react';
+import { Check, CloudOff, TriangleAlert } from 'lucide-react';
 
 import { useSaveStatus } from './autosave';
 
@@ -21,7 +21,7 @@ export const SaveIndicator = () => {
 
   // До первой правки писать «Все изменения сохранены» — обещание, которого
   // мы не давали: сохранять было нечего.
-  if (status === 'idle') return null;
+  if (status === 'idle' || status === 'saving') return null;
 
   return (
     <span
@@ -31,7 +31,6 @@ export const SaveIndicator = () => {
       // Спокойное объявление: индикатор меняется часто, assertive заспамил бы скринридер.
       aria-live="polite"
     >
-      {status === 'saving' && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
       {status === 'saved' && <Check className="size-3.5" aria-hidden="true" />}
       {(status === 'error' || status === 'local-only') && (
         <CloudOff className="size-3.5" aria-hidden="true" />

@@ -19,7 +19,7 @@ import { useBoardStore } from '@/shared/store/board';
 
 import { keepsAspect, MIN_NODE_SIDE } from './resize';
 
-export function SelectionTransformer() {
+export function SelectionTransformer({ readOnly = false }: { readOnly?: boolean }) {
   const ref = useRef<Konva.Transformer | null>(null);
   const shiftRef = useRef(false);
 
@@ -33,6 +33,7 @@ export function SelectionTransformer() {
   // может зажать и отпустить его посреди перетаскивания ручки, и правило
   // обязано переключиться прямо в этот момент.
   useEffect(() => {
+    if (readOnly) return;
     const sync = (event: KeyboardEvent) => {
       shiftRef.current = event.shiftKey;
     };
@@ -42,7 +43,7 @@ export function SelectionTransformer() {
       window.removeEventListener('keydown', sync);
       window.removeEventListener('keyup', sync);
     };
-  }, []);
+  }, [readOnly]);
 
   const applyAspectRule = useCallback(() => {
     const transformer = ref.current;
@@ -86,6 +87,11 @@ export function SelectionTransformer() {
     const transformer = ref.current;
     if (!transformer) return;
 
+    if (readOnly) {
+      transformer.nodes([]);
+      return;
+    }
+
     const stage = transformer.getStage();
     if (!stage || editingNodeId) {
       transformer.nodes([]);
@@ -99,7 +105,7 @@ export function SelectionTransformer() {
     transformer.nodes(shapes);
     // Правило видно сразу: у картинки только угловые ручки, у фигуры все восемь.
     applyAspectRule();
-  }, [selection, nodes, editingNodeId, applyAspectRule]);
+  }, [selection, nodes, editingNodeId, applyAspectRule, readOnly]);
 
   const commit = (_event?: unknown) => {
     const transformer = ref.current;
@@ -145,6 +151,8 @@ export function SelectionTransformer() {
       rotateNode(id, shape.rotation());
     }
   };
+
+  if (readOnly) return null;
 
   return (
     <Transformer

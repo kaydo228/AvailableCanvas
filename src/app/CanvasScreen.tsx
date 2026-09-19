@@ -12,7 +12,9 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
-import { ShareButton, useCloudSync } from '@/features/cloud';
+import { AccessBadge, ShareButton, useCloudSync, useProjectRealtime } from '@/features/cloud';
+import { canEdit, type ProjectAccess } from '@/features/cloud/model/access';
+import { connectRemoteImages } from '@/features/cloud/model/images';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
@@ -26,18 +28,29 @@ import {
 import { beginSaveSession, endSaveSession, useAutosave } from '@/features/persistence/autosave';
 import { describeRepairs, repairDocument } from '@/features/persistence/repair';
 import { SaveIndicator } from '@/features/persistence/SaveIndicator';
+import { readSyncState } from '@/features/persistence/syncStore';
 import { HelpDialog, useShortcuts } from '@/features/shortcuts';
 import { useBoardStore } from '@/shared/store/board';
 import { ThemeToggle } from '@/shared/ui';
 
 /** `undefined` — ещё грузим, `null` — такого проекта нет. */
-type LoadState = { name: string } | null | undefined;
+type LoadState =
+  | {
+      name: string;
+      access: ProjectAccess;
+      isPublic: boolean;
+      remote: boolean;
+      revoked: boolean;
+    }
+  | null
+  | undefined;
 
 export function CanvasScreen() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>(undefined);
   const canvasRef = useRef<CanvasStageHandle>(null);
+  const editable = state !== undefined && state !== null && !state.revoked && canEdit(state.access);
 
   const loadDocument = useBoardStore((s) => s.loadDocument);
   const closeDocument = useBoardStore((s) => s.closeDocument);
@@ -47,20 +60,42 @@ export function CanvasScreen() {
     },
     [projectId],
   );
+  const updateRemoteName = useCallback((name: string) => {
+    setState((current) =>
+      current === undefined || current === null ? current : { ...current, name },
+    );
+  }, []);
+  const handleRevoked = useCallback(() => {
+    setState((current) =>
+      current === undefined || current === null ? current : { ...current, revoked: true },
+    );
+    toast.error('Доступ к проекту отозван', {
+      description: 'Доску ещё можно экспортировать, пока эта страница открыта.',
+      duration: Number.POSITIVE_INFINITY,
+      id: 'project-access-revoked',
+    });
+  }, []);
 
   // Автосохранение с дебаунсом (FR-11). Вьюпорт едет вместе с документом.
-  useAutosave();
+  useAutosave(editable);
 
   // Выгрузка на сервер (задача 4 cloud-sync). Свой дебаунс 3000 мс поверх
   // уже сохранённого документа — не привязан к автосохранению.
-  useCloudSync(projectId);
+  useCloudSync(projectId, editable ? state?.access : undefined);
 
   // История отмен (FR-10). Своя у каждого проекта, чистится на входе и выходе.
   useHistorySession();
 
   // Горячие клавиши (6.2, 6.3). Живут только на холсте: в списке проектов
   // буква «S» должна печататься в поиске, а не ставить стикер.
-  useShortcuts();
+  useShortcuts(editable);
+
+  useProjectRealtime({
+    ...(state?.remote && !state.revoked && projectId ? { projectId } : {}),
+    ...(state !== undefined && state !== null && !state.revoked ? { access: state.access } : {}),
+    onName: updateRemoteName,
+    onRevoked: handleRevoked,
+  });
 
   useEffect(() => {
     if (!projectId) {
@@ -72,7 +107,11 @@ export function CanvasScreen() {
     setState(undefined);
 
     const open = async () => {
-      const [project, stored] = await Promise.all([getProject(projectId), getDocument(projectId)]);
+      const [project, stored, sync] = await Promise.all([
+        getProject(projectId),
+        getDocument(projectId),
+        readSyncState(projectId),
+      ]);
       if (cancelled) return;
       if (!project || !stored) {
         setState(null);
@@ -103,11 +142,19 @@ export function CanvasScreen() {
       // потом сверяется с этим значением и не затирает чужую работу молча.
       beginSaveSession(project.id, openedAt);
 
+      if (sync?.owner) connectRemoteImages(projectId);
+
       loadDocument(document);
       // Открытие проекта — не действие пользователя. Без явной чистки первый
       // Cmd+Z откатывал бы саму загрузку: доска на секунду становилась пустой.
       clearHistory();
-      setState({ name: project.name });
+      setState({
+        name: project.name,
+        access: sync?.access ?? 'owner',
+        isPublic: sync?.isPublic ?? false,
+        remote: sync?.owner !== undefined && sync.remoteRevision !== undefined,
+        revoked: false,
+      });
     };
 
     void open();
@@ -123,6 +170,7 @@ export function CanvasScreen() {
       // Object URL'ы картинок живут до явного отзыва — иначе они копятся
       // за всю сессию по всем открытым доскам.
       releaseImageCache();
+      connectRemoteImages(null);
     };
   }, [projectId, loadDocument, closeDocument]);
 
@@ -169,21 +217,34 @@ export function CanvasScreen() {
         <span className="h-4 w-px shrink-0 bg-rule" aria-hidden="true" />
 
         <span className="min-w-0 truncate font-medium text-ink text-sm">{state.name}</span>
-        <SaveIndicator />
+        {state.revoked ? (
+          <span className="rounded-full border border-signal/30 bg-signal/10 px-2 py-0.5 font-mono text-signal text-micro">
+            Доступ отозван
+          </span>
+        ) : (
+          <AccessBadge access={state.access} />
+        )}
+        {editable && <SaveIndicator />}
 
         <div className="ml-auto flex items-center gap-1.5">
           <ThemeToggle />
-          {projectId && <ShareButton projectId={projectId} />}
+          {projectId && !state.revoked && (
+            <ShareButton projectId={projectId} access={state.access} isPublic={state.isPublic} />
+          )}
           <ExportMenu name={state.name} />
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 overflow-hidden">
-          <Toolbar />
-          <CanvasStage ref={canvasRef} onThumbnail={saveThumbnail} />
+          {editable && <Toolbar />}
+          <CanvasStage
+            ref={canvasRef}
+            readOnly={!editable}
+            {...(editable ? { onThumbnail: saveThumbnail } : {})}
+          />
         </div>
-        <InspectorPanel />
+        {editable && <InspectorPanel />}
       </div>
 
       <HelpDialog />

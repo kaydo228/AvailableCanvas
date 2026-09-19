@@ -11,6 +11,7 @@ import { repairDocument } from '@/features/persistence/repair';
 import { allSyncStates, forgetSyncState, writeSyncState } from '@/features/persistence/syncStore';
 import type { Id } from '@/shared/types/document';
 
+import type { MemberRole, ProjectAccess } from './access';
 import { getCloud } from './client';
 import { type Decision, decide, type LocalBoard, type RemoteBoard } from './merge';
 import { type ProjectRow, pushProject, rowUpdatedAt } from './push';
@@ -24,14 +25,38 @@ import { type ProjectRow, pushProject, rowUpdatedAt } from './push';
  * каждой доске, которая когда-то синхронизировалась — то есть один отказ
  * сервера стирал бы из IndexedDB все синхронизированные доски разом.
  */
-export const remoteList = async (owner: string): Promise<RemoteBoard[] | null> => {
+export const remoteList = async (actorId: string): Promise<RemoteBoard[] | null> => {
   const cloud = getCloud();
   if (!cloud) return null;
 
-  const { data, error } = await cloud.from('projects').select('id, updated_at').eq('owner', owner);
-  if (error || !data) return null;
+  const [projects, memberships] = await Promise.all([
+    cloud.from('projects').select('id, owner, updated_at, revision'),
+    cloud.from('project_members').select('project_id, role').eq('user_id', actorId),
+  ]);
+  if (projects.error || !projects.data || memberships.error || !memberships.data) return null;
 
-  return data.map((row) => ({ id: row.id as Id, updatedAt: rowUpdatedAt(row.updated_at) }));
+  const roles = new Map<string, MemberRole>();
+  for (const membership of memberships.data) {
+    if (membership.role === 'editor' || membership.role === 'viewer') {
+      roles.set(membership.project_id, membership.role);
+    }
+  }
+
+  return projects.data.flatMap((row) => {
+    const access: ProjectAccess | undefined =
+      row.owner === actorId ? 'owner' : roles.get(row.id as string);
+    if (!access) return [];
+
+    return [
+      {
+        id: row.id as Id,
+        owner: row.owner as string,
+        updatedAt: rowUpdatedAt(row.updated_at),
+        revision: row.revision as number,
+        access,
+      },
+    ];
+  });
 };
 
 export const localBoards = async (): Promise<LocalBoard[]> => {
@@ -44,11 +69,11 @@ export const localBoards = async (): Promise<LocalBoard[]> => {
   });
 };
 
-export const pullProject = async (projectId: Id): Promise<boolean> => {
+export const pullProject = async (remote: RemoteBoard): Promise<boolean> => {
   const cloud = getCloud();
   if (!cloud) return false;
 
-  const { data, error } = await cloud.from('projects').select('*').eq('id', projectId).single();
+  const { data, error } = await cloud.from('projects').select('*').eq('id', remote.id).single();
   if (error || !data) return false;
 
   const row = data as ProjectRow;
@@ -68,8 +93,10 @@ export const pullProject = async (projectId: Id): Promise<boolean> => {
 
   await writeSyncState({
     projectId: row.id,
-    owner: row.owner,
+    owner: remote.owner,
+    access: remote.access,
     remoteUpdatedAt: updatedAt,
+    remoteRevision: remote.revision,
     dirty: false,
     isPublic: row.is_public,
   });
@@ -114,9 +141,13 @@ export const syncNow = async (owner: string): Promise<void> => {
   // сервере» неотличимо от «сервер не сказал», а цена ошибки разная.
   if (!remote) return;
 
+  const remoteById = new Map(remote.map((board) => [board.id, board]));
   await applyDecisions(decide(local, remote, owner), {
     push: (projectId) => pushProject(projectId, owner),
-    pull: pullProject,
+    pull: (projectId) => {
+      const board = remoteById.get(projectId);
+      return board ? pullProject(board) : Promise.resolve(false);
+    },
     deleteLocal,
   });
 };

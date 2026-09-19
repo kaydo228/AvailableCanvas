@@ -2,24 +2,24 @@ import { expect, test } from '@playwright/test';
 
 /**
  * Выгрузка доски на сервер (задача 4 плана cloud-sync). Сети нет — клиент
- * подменяется заглушкой, которая пишет вызовы `upsert` в массив на `window`.
+ * подменяется заглушкой, которая пишет вызовы `rpc('save_project')` в массив на `window`.
  *
  * Заглушку ставим через `addInitScript`, а не `page.evaluate` после навигации:
  * `main.tsx` зовёт `initSession()` синхронно при загрузке модулей, до первого
  * доступного тесту момента после `page.goto` — см. `e2e/cloud-auth.spec.ts`.
  */
 
-const stubCloudClient = (opts: { failUpsert: boolean }) => {
+const stubCloudClient = (opts: { failSave: boolean }) => {
   const user = { id: 'user-1', email: 'test@example.com' };
   type FakeSession = { user: typeof user };
   let session: FakeSession | null = null;
   let onChange: ((event: string, session: FakeSession | null) => void) | null = null;
 
-  window.__upserts = [];
+  window.__saveProjectCalls = [];
   // Читается на каждый вызов, а не один раз при создании клиента: тест на
   // Important 2 должен переключить отказ сети посреди сценария, между двумя
   // выгрузками одной и той же доски.
-  window.__failUpsert = opts.failUpsert;
+  window.__failSaveProject = opts.failSave;
 
   const client = {
     auth: {
@@ -40,11 +40,27 @@ const stubCloudClient = (opts: { failUpsert: boolean }) => {
         return { error: null };
       },
     },
-    from: (_table: string) => ({
-      upsert: async (row: Window['__upserts'][number]) => {
-        window.__upserts.push(row);
-        return window.__failUpsert ? { error: { message: 'сеть недоступна' } } : { error: null };
-      },
+    rpc: async (name: string, args?: Record<string, unknown>) => {
+      if (name === 'accept_my_project_invites') return { data: [], error: null };
+      if (name !== 'save_project') return { data: null, error: { message: 'unknown rpc' } };
+      window.__saveProjectCalls.push(args as Window['__saveProjectCalls'][number]);
+      if (window.__failSaveProject) return { data: null, error: { message: 'сеть недоступна' } };
+      return {
+        data: [
+          {
+            revision: window.__saveProjectCalls.length,
+            updated_at: new Date().toISOString(),
+            updated_by: user.id,
+          },
+        ],
+        error: null,
+      };
+    },
+    from: (table: string) => ({
+      select: () =>
+        table === 'project_members'
+          ? { eq: async () => ({ data: [], error: null }) }
+          : Promise.resolve({ data: [], error: null }),
       delete: () => ({ eq: async () => ({ error: null }) }),
     }),
   };
@@ -123,7 +139,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('правка доезжает на сервер один раз, с новым узлом внутри', async ({ page }) => {
-  await page.addInitScript(stubCloudClient, { failUpsert: false });
+  await page.addInitScript(stubCloudClient, { failSave: false });
   await page.goto('/');
 
   await signIn(page);
@@ -135,14 +151,14 @@ test('правка доезжает на сервер один раз, с нов
   // 500 мс автосохранения + 3000 мс дебаунса выгрузки — с запасом.
   await page.waitForTimeout(3500);
 
-  const upserts = await page.evaluate(() => window.__upserts);
-  expect(upserts).toHaveLength(1);
-  expect(upserts[0].id).toBe(projectId);
-  expect(Object.keys(upserts[0].document.nodes)).toContain('shape-1');
+  const calls = await page.evaluate(() => window.__saveProjectCalls);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].p_project_id).toBe(projectId);
+  expect(Object.keys(calls[0].p_document.nodes)).toContain('shape-1');
 });
 
 test('отказ сети не портит доску — узел на месте, sync помечен dirty', async ({ page }) => {
-  await page.addInitScript(stubCloudClient, { failUpsert: true });
+  await page.addInitScript(stubCloudClient, { failSave: true });
   await page.goto('/');
 
   await signIn(page);
@@ -164,7 +180,7 @@ test('отказ сети не портит доску — узел на мес�
 test('после успешной выгрузки обрыв сети не стирает remoteUpdatedAt (Important 2)', async ({
   page,
 }) => {
-  await page.addInitScript(stubCloudClient, { failUpsert: false });
+  await page.addInitScript(stubCloudClient, { failSave: false });
   await page.goto('/');
 
   await signIn(page);
@@ -182,7 +198,7 @@ test('после успешной выгрузки обрыв сети не ст
 
   // Сеть отваливается перед следующей правкой той же доски.
   await page.evaluate(() => {
-    window.__failUpsert = true;
+    window.__failSaveProject = true;
   });
   await addShape(page, 'shape-4');
   await expect(page.getByText('Все изменения сохранены')).toBeVisible();
@@ -198,10 +214,10 @@ test('после успешной выгрузки обрыв сети не ст
   expect(afterFailure?.remoteUpdatedAt).toBe(afterSuccess?.remoteUpdatedAt);
 });
 
-test('после уже отправленной выгрузки уход с холста не шлёт лишний upsert (Important 1)', async ({
+test('после уже отправленной выгрузки уход с холста не шлёт лишний save_project (Important 1)', async ({
   page,
 }) => {
-  await page.addInitScript(stubCloudClient, { failUpsert: false });
+  await page.addInitScript(stubCloudClient, { failSave: false });
   await page.goto('/');
 
   await signIn(page);
@@ -212,7 +228,7 @@ test('после уже отправленной выгрузки уход с х
 
   // Дожидаемся, пока таймер дебаунса сработает сам — выгрузка уже ушла.
   await page.waitForTimeout(3500);
-  expect(await page.evaluate(() => window.__upserts.length)).toBe(1);
+  expect(await page.evaluate(() => window.__saveProjectCalls.length)).toBe(1);
 
   // Уход с холста ПОСЛЕ того, как таймер уже отработал: cleanup не должен
   // принять сработавший таймер за ещё не отправленную выгрузку и продублировать её.
@@ -222,13 +238,13 @@ test('после уже отправленной выгрузки уход с х
   // проверка успевает раньше, чем ушёл бы лишний вызов.
   await page.waitForTimeout(300);
 
-  expect(await page.evaluate(() => window.__upserts.length)).toBe(1);
+  expect(await page.evaluate(() => window.__saveProjectCalls.length)).toBe(1);
 });
 
 test('индикатор различает «сохранено только здесь» и настоящее сохранение (задача 8)', async ({
   page,
 }) => {
-  await page.addInitScript(stubCloudClient, { failUpsert: true });
+  await page.addInitScript(stubCloudClient, { failSave: true });
   await page.goto('/');
 
   await signIn(page);
@@ -246,7 +262,7 @@ test('индикатор различает «сохранено только з
   // Сеть починилась, следующая правка уезжает — индикатор возвращается
   // к обычному «сохранено».
   await page.evaluate(() => {
-    window.__failUpsert = false;
+    window.__failSaveProject = false;
   });
   await addShape(page, 'shape-7');
   await expect(page.getByText('Все изменения сохранены')).toBeVisible();

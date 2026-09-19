@@ -7,7 +7,7 @@ import type { ConnectorNode, Endpoint } from '@/shared/types/document';
 
 import { pointEndpoint } from './geometry';
 
-export const DEFAULT_CONNECTOR_STROKE = '#111111';
+export const DEFAULT_CONNECTOR_STROKE = '#f8fafc';
 export const DEFAULT_CONNECTOR_WIDTH = 2;
 
 export type ConnectorOverrides = Partial<Omit<ConnectorNode, 'id' | 'type'>>;

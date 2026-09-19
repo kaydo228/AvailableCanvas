@@ -1,5 +1,7 @@
 node_modules
 dist/
+.worktrees/
+supabase/.temp/
 .DS_Store
 *.local
 .env

@@ -109,6 +109,7 @@ export function polygonPoints(
 function ShapeViewInner({
   node,
   selected,
+  readOnly,
   editing,
   onSelect,
   onStartEditing,
@@ -163,7 +164,7 @@ function ShapeViewInner({
       y={node.y}
       rotation={node.rotation}
       opacity={node.opacity}
-      draggable={!node.locked}
+      draggable={!readOnly && !node.locked}
       onClick={(event: Konva.KonvaEventObject<MouseEvent>) => {
         // Гасим всплытие: обработчик на Stage считает клик по пустому месту
         // и сбросил бы выделение, которое мы только что поставили.
@@ -172,6 +173,7 @@ function ShapeViewInner({
       }}
       onDblClick={(event: Konva.KonvaEventObject<MouseEvent>) => {
         event.cancelBubble = true;
+        if (readOnly) return;
         onStartEditing(node.id);
       }}
       onDragEnd={(event: Konva.KonvaEventObject<DragEvent>) => {

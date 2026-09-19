@@ -163,6 +163,23 @@ export const deleteProject = async (id: Id): Promise<void> => {
 };
 
 /**
+ * Удаляет локальную копию после отзыва серверного доступа.
+ *
+ * Стор холста не трогаем: открытая вкладка остаётся доступна для экспорта до
+ * ухода со страницы. Blobs тоже пока не подметаем — они нужны этому экспорту.
+ */
+export const removeRevokedProject = async (id: Id): Promise<void> => {
+  const tx = (await db()).transaction(['projects', 'documents', 'sync'], 'readwrite');
+  await Promise.all([
+    tx.objectStore('projects').delete(id),
+    tx.objectStore('documents').delete(id),
+    tx.objectStore('sync').delete(id),
+    tx.done,
+  ]);
+  publish({ kind: 'projects-changed' });
+};
+
+/**
  * Запись проекта и документа как есть — для того, что пришло с сервера.
  *
  * `updatedAt` НЕ сдвигается и проверка сессии вкладки не делается: это не

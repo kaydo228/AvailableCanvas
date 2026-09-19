@@ -3,10 +3,16 @@ import { createRoot } from 'react-dom/client';
 
 import '@/index.css';
 
+import { restorePagesRoute } from '@/app/pagesRedirect';
 import { Router } from '@/app/router';
 import { initSession } from '@/features/cloud';
 import { sweepBlobs } from '@/features/persistence';
 import { useBoardStore } from '@/shared/store/board';
+
+// GitHub Pages возвращает SPA-маршрут через 404.html. Восстанавливаем его до
+// инициализации Auth, чтобы Supabase разобрал callback уже на `/invite`.
+const restoredRoute = restorePagesRoute(window.location.href);
+if (restoredRoute) window.history.replaceState(null, '', restoredRoute);
 
 // Кто вошёл — спрашиваем один раз при старте, до первого рендера шапки:
 // initSession сам разберётся, что делать без облака (см. cloud/model/session.ts).

@@ -21,12 +21,13 @@ import { activeShortcuts, type ShortcutActions } from './bindings';
 import { useShortcutsUI } from './store';
 import { useClipboard } from './useClipboard';
 
-export const useShortcuts = (): void => {
+export const useShortcuts = (enabled = true): void => {
   // Копирование и вставка — соседний хук: они висят на событиях `copy`
   // и `paste`, а не на клавишах, и в таблицу tinykeys не помещаются.
-  useClipboard();
+  useClipboard(enabled);
 
   useEffect(() => {
+    if (!enabled) return;
     const board = useBoardStore;
 
     const actions: ShortcutActions = {
@@ -115,5 +116,5 @@ export const useShortcuts = (): void => {
       unbindKeys();
       window.removeEventListener('keydown', onEscape);
     };
-  }, []);
+  }, [enabled]);
 };

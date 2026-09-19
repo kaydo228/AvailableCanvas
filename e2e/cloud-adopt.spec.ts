@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test';
  *
  * Заглушка сервера здесь всегда пуста (ни одной чужой доски): весь сценарий —
  * про то, что происходит с доской, нарисованной ДО входа, на этом устройстве.
- * `upsert` (в `window.__upserts`) считается отдельно от круга синхронизации,
+ * `save_project` (в `window.__saveProjectCalls`) считается отдельно от круга синхронизации,
  * чтобы отличить «доска ушла на сервер» от «круг просто прошёл».
  */
 
@@ -19,7 +19,7 @@ const stubCloudClient = () => {
   let session: FakeSession | null = null;
   let onChange: ((event: string, session: FakeSession | null) => void) | null = null;
 
-  window.__upserts = [];
+  window.__saveProjectCalls = [];
 
   const client = {
     auth: {
@@ -40,16 +40,26 @@ const stubCloudClient = () => {
         return { error: null };
       },
     },
-    from: (_table: string) => ({
-      // remoteList: select('id, updated_at').eq('owner', owner) — сервер пуст.
-      select: (_columns: string) => ({
-        eq: (_column: string, _value: string) => Promise.resolve({ data: [], error: null }),
-      }),
-      // pushProject: cloud.from('projects').upsert(row) — фиксируем факт выгрузки.
-      upsert: async (row: Window['__upserts'][number]) => {
-        window.__upserts.push(row);
-        return { error: null };
-      },
+    rpc: async (name: string, args?: Record<string, unknown>) => {
+      if (name === 'accept_my_project_invites') return { data: [], error: null };
+      if (name !== 'save_project') return { data: null, error: { message: 'unknown rpc' } };
+      window.__saveProjectCalls.push(args as Window['__saveProjectCalls'][number]);
+      return {
+        data: [
+          {
+            revision: window.__saveProjectCalls.length,
+            updated_at: new Date().toISOString(),
+            updated_by: user.id,
+          },
+        ],
+        error: null,
+      };
+    },
+    from: (table: string) => ({
+      select: () =>
+        table === 'project_members'
+          ? { eq: async () => ({ data: [], error: null }) }
+          : Promise.resolve({ data: [], error: null }),
     }),
   };
 
@@ -119,7 +129,7 @@ const stubCloudClientSlowFirstCycle = (delayMs: number) => {
   let onChange: ((event: string, session: FakeSession | null) => void) | null = null;
   let ownerCalls = 0;
 
-  window.__upserts = [];
+  window.__saveProjectCalls = [];
   window.__ownerCallTimes = [];
 
   const client = {
@@ -141,21 +151,32 @@ const stubCloudClientSlowFirstCycle = (delayMs: number) => {
         return { error: null };
       },
     },
-    from: (_table: string) => ({
-      select: (_columns: string) => ({
-        eq: (column: string, _value: string) => {
-          if (column !== 'owner') return Promise.resolve({ data: [], error: null });
-          ownerCalls += 1;
-          window.__ownerCallTimes.push(performance.now());
-          if (ownerCalls > 1) return Promise.resolve({ data: [], error: null });
-          return new Promise((resolve) => {
-            setTimeout(() => resolve({ data: [], error: null }), delayMs);
-          });
-        },
-      }),
-      upsert: async (row: Window['__upserts'][number]) => {
-        window.__upserts.push(row);
-        return { error: null };
+    rpc: async (name: string, args?: Record<string, unknown>) => {
+      if (name === 'accept_my_project_invites') return { data: [], error: null };
+      if (name !== 'save_project') return { data: null, error: { message: 'unknown rpc' } };
+      window.__saveProjectCalls.push(args as Window['__saveProjectCalls'][number]);
+      return {
+        data: [
+          {
+            revision: window.__saveProjectCalls.length,
+            updated_at: new Date().toISOString(),
+            updated_by: user.id,
+          },
+        ],
+        error: null,
+      };
+    },
+    from: (table: string) => ({
+      select: () => {
+        if (table === 'project_members') {
+          return { eq: async () => ({ data: [], error: null }) };
+        }
+        ownerCalls += 1;
+        window.__ownerCallTimes.push(performance.now());
+        if (ownerCalls > 1) return Promise.resolve({ data: [], error: null });
+        return new Promise((resolve) => {
+          setTimeout(() => resolve({ data: [], error: null }), delayMs);
+        });
       },
     }),
   };
@@ -197,7 +218,7 @@ test('«Перенести» закрепляет доску за аккаунт
   // Перенос закрепил доску, круг синхронизации следом обязан выгрузить её:
   // без этого дожидаться пришлось бы следующего входа.
   await expect
-    .poll(() => page.evaluate(() => window.__upserts.map((row) => row.id)))
+    .poll(() => page.evaluate(() => window.__saveProjectCalls.map((row) => row.p_project_id)))
     .toContain(projectId);
 });
 
@@ -219,7 +240,7 @@ test('«Оставить локальными» не выгружает доск
   // его), но для доски без владельца решение — «ничего не делать»: выгрузки
   // быть не должно.
   await expect(page.getByText('Останется локальной')).toBeVisible();
-  expect(await page.evaluate(() => window.__upserts.length)).toBe(0);
+  expect(await page.evaluate(() => window.__saveProjectCalls.length)).toBe(0);
 
   await signOut(page);
   await signIn(page);
@@ -271,9 +292,9 @@ test('два круга сериализованы: второй remoteList ст
   expect(times).toHaveLength(2);
   expect(times[1] - times[0]).toBeGreaterThanOrEqual(delayMs - 200);
 
-  const upsertsForProject = await page.evaluate(
-    (id) => window.__upserts.filter((row) => row.id === id).length,
+  const savesForProject = await page.evaluate(
+    (id) => window.__saveProjectCalls.filter((row) => row.p_project_id === id).length,
     projectId,
   );
-  expect(upsertsForProject).toBe(1);
+  expect(savesForProject).toBe(1);
 });

@@ -18,11 +18,14 @@ VITE_SUPABASE_ANON_KEY=your-anonKey-here
 
 Без этих переменных приложение работает как раньше, полностью локально.
 
-## Таблицы и правила доступа
+## Базовая таблица и правила доступа
 
 Откройте [supabase/schema.sql](../supabase/schema.sql), скопируйте его целиком в SQL Editor
 проекта Supabase и нажмите **Run**. Доска — это одна строка, документ целиком хранится в
 колонке `document` (JSON), `thumbnail` содержит превью для списка проектов.
+
+Этот шаг нужен один раз для нового пустого проекта. Если `schema.sql` уже выполнялся и
+таблица `projects` существует, повторять его перед обновлением совместной работы не нужно.
 
 **Колонки:**
 - `id` — идентификатор доски, ставится клиентом (nanoid)
@@ -32,6 +35,50 @@ VITE_SUPABASE_ANON_KEY=your-anonKey-here
 - `thumbnail` — превью доски для сетки в списке (PNG в base64 или ссылка)
 - `document` — весь документ целиком (JSON из `Project` клиента)
 - `is_public` — флаг публичной доски (читаемой по ссылке)
+
+## Совместная работа
+
+Миграция
+[`20260918120000_project_collaboration.sql`](../supabase/migrations/20260918120000_project_collaboration.sql)
+добавляет:
+
+- `project_members` — зарегистрированных участников с ролью `editor` или `viewer`;
+- `project_invites` — приглашения для адресов, которые ещё не зарегистрированы;
+- атомарное сохранение с `revision` и `updated_by`;
+- RLS-политики для владельца, редактора и зрителя;
+- RPC принятия приглашения и управление участниками;
+- публикацию `projects` в Supabase Realtime.
+
+Владелец управляет участниками. Редактор может менять доску, а зритель — только
+открывать, перемещаться по холсту и экспортировать. Realtime передаёт последнее
+сохранённое состояние всей доски; это не CRDT: чужих курсоров и бесконфликтного
+слияния одновременных правок одного объекта нет.
+
+### Развёртывание в production
+
+Из корня репозитория выполните:
+
+```bash
+npx supabase link --project-ref wfhxobnovnhsimnfnefb
+npx supabase db push
+npx supabase secrets set APP_URL=https://kaydo228.github.io/AvailableCanvas/
+npx supabase functions deploy invite-project-member --project-ref wfhxobnovnhsimnfnefb
+```
+
+Затем в Supabase Dashboard откройте **Authentication → URL Configuration →
+Redirect URLs** и добавьте точный адрес:
+
+```text
+https://kaydo228.github.io/AvailableCanvas/invite
+```
+
+После этого письмо-приглашение вернёт пользователя на экран принятия доступа,
+где приложение предложит задать пароль, примет приглашение и откроет проект.
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` и `SUPABASE_SERVICE_ROLE_KEY` доступны Edge
+Function автоматически. В GitHub Pages их копировать нельзя, особенно
+`SUPABASE_SERVICE_ROLE_KEY`: это серверный секрет с обходом RLS. В команду
+`supabase secrets set` вручную передаётся только `APP_URL`.
 
 ## Хранилище изображений
 
@@ -60,20 +107,20 @@ VITE_SUPABASE_ANON_KEY=your-anonKey-here
 у нас этого нет, потому что подписанные ссылки живут ограниченное время и их надо
 перевыпускать.
 
-> Проверено рассуждением по тексту SQL и вызовам клиента, не на живом проекте Supabase:
-> проекта у нас нет. Перед реальным развёртыванием политики стоит проверить руками —
-> в первую очередь то, что `list()` чужой папки отвечает пустым списком, а `download()`
-> своей — работает.
+## Переменные GitHub Pages
 
-## Развёртывание на хостинге
-
-При развёртывании на Vercel, Netlify или другом хостинге добавьте переменные окружения
-в настройки проекта:
+Workflow сборки уже читает две публичные переменные из GitHub Actions secrets:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-Убедитесь, что это **публичные переменные** (префикс `VITE_`), они будут встроены в клиентский код.
+Добавьте их в **GitHub → Settings → Secrets and variables → Actions**. Это
+публичная конфигурация браузерного клиента: префикс `VITE_` означает, что значения
+будут встроены в JavaScript-сборку. Безопасность данных обеспечивает RLS, а не
+секретность publishable/anon key.
+
+Серверные переменные Edge Function и `APP_URL` находятся в Supabase и не
+передаются в workflow GitHub Pages.
 
 ## Пинг проекта для бесплатного плана
 

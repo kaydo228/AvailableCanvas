@@ -33,6 +33,11 @@ const PublicBoardScreen = lazy(async () => {
   return { default: Screen };
 });
 
+const InviteScreen = lazy(async () => {
+  const { InviteScreen: Screen } = await import('@/app/InviteScreen');
+  return { default: Screen };
+});
+
 function ProjectsRoute() {
   return (
     <div className="min-h-screen bg-paper">
@@ -74,6 +79,14 @@ export function Router() {
             */
             <Suspense fallback={<div className="h-screen bg-paper" />}>
               <CanvasScreen />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/invite"
+          element={
+            <Suspense fallback={<div className="h-screen bg-paper" />}>
+              <InviteScreen />
             </Suspense>
           }
         />
