@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { doc, shape } from '@/shared/model/fixtures';
 import { setCloud } from './client';
-import { deleteRemote, pushProject, rowUpdatedAt, toRow } from './push';
+import { deleteRemote, isProjectPushPending, pushProject, rowUpdatedAt, toRow } from './push';
 
 const repo = vi.hoisted(() => ({
   getProject: vi.fn(async () => ({ id: 'p1', name: 'Доска', createdAt: 0, updatedAt: 100 })),
@@ -138,6 +138,32 @@ describe('pushProject: согласие и владелец', () => {
         dirty: false,
       }),
     );
+  });
+
+  it('marks only this client save as pending until its metadata is stored', async () => {
+    let finishRpc: ((value: Awaited<ReturnType<typeof rpc>>) => void) | undefined;
+    rpc.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRpc = resolve;
+        }),
+    );
+
+    const saving = pushProject('p1', 'user-1');
+    await vi.waitFor(() => expect(isProjectPushPending('p1')).toBe(true));
+    finishRpc?.({
+      data: [
+        {
+          revision: 1,
+          updated_at: new Date(100).toISOString(),
+          updated_by: 'user-1',
+        },
+      ],
+      error: null,
+    });
+
+    await expect(saving).resolves.toBe(true);
+    expect(isProjectPushPending('p1')).toBe(false);
   });
 
   it('viewer не загружает картинки и не вызывает RPC', async () => {

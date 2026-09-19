@@ -50,6 +50,21 @@ export const toRow = (
 /** Время строки обратно в миллисекунды — тем же способом во всех местах. */
 export const rowUpdatedAt = (value: string): number => Date.parse(value);
 
+/** Записи, которые прямо сейчас отправляет именно этот экземпляр приложения. */
+const pendingWrites = new Map<Id, number>();
+
+const beginProjectPush = (projectId: Id): void => {
+  pendingWrites.set(projectId, (pendingWrites.get(projectId) ?? 0) + 1);
+};
+
+const endProjectPush = (projectId: Id): void => {
+  const remaining = (pendingWrites.get(projectId) ?? 1) - 1;
+  if (remaining > 0) pendingWrites.set(projectId, remaining);
+  else pendingWrites.delete(projectId);
+};
+
+export const isProjectPushPending = (projectId: Id): boolean => pendingWrites.has(projectId);
+
 export const pushProject = async (projectId: Id, owner: string): Promise<boolean> => {
   const cloud = getCloud();
   if (!cloud) return false;
@@ -80,38 +95,47 @@ export const pushProject = async (projectId: Id, owner: string): Promise<boolean
   // картинки, и само не починится. Дальше это та же ветка `error`, что и
   // отказ `upsert`: остаётся прежний `remoteUpdatedAt`, ставится `dirty`.
   const imagesUploaded = await uploadImages(document, projectId);
-  const result = imagesUploaded
-    ? await cloud.rpc('save_project', {
-        p_project_id: project.id,
-        p_name: project.name,
-        p_created_at: new Date(project.createdAt).toISOString(),
-        p_updated_at: new Date(project.updatedAt).toISOString(),
-        p_thumbnail: project.thumbnail ?? null,
-        p_document: document,
-      })
-    : { data: null, error: new Error('картинки доски не выгрузились') };
-  const saved = Array.isArray(result.data) ? result.data[0] : undefined;
-  const error = result.error || !saved;
+  let pushStarted = false;
+  try {
+    if (imagesUploaded) {
+      beginProjectPush(projectId);
+      pushStarted = true;
+    }
+    const result = imagesUploaded
+      ? await cloud.rpc('save_project', {
+          p_project_id: project.id,
+          p_name: project.name,
+          p_created_at: new Date(project.createdAt).toISOString(),
+          p_updated_at: new Date(project.updatedAt).toISOString(),
+          p_thumbnail: project.thumbnail ?? null,
+          p_document: document,
+        })
+      : { data: null, error: new Error('картинки доски не выгрузились') };
+    const saved = Array.isArray(result.data) ? result.data[0] : undefined;
+    const error = result.error || !saved;
 
-  // `writeSyncState` — это `put`, полная перезапись: при ошибке нельзя молча
-  // выбросить remoteUpdatedAt, иначе доска, которая уже уезжала на сервер,
-  // после первого же обрыва сети станет неотличима от той, что не уезжала
-  // никогда. `exactOptionalPropertyTypes` не даёт положить туда `undefined`
-  // явно — если доска ни разу не доехала, ключ просто не пишем.
-  const remoteUpdatedAt = error ? state?.remoteUpdatedAt : rowUpdatedAt(saved.updated_at);
-  const remoteRevision = error ? state?.remoteRevision : (saved.revision as number);
-  await writeSyncState({
-    projectId,
-    owner: state?.owner ?? owner,
-    ...(access ? { access } : {}),
-    ...(remoteUpdatedAt !== undefined ? { remoteUpdatedAt } : {}),
-    ...(remoteRevision !== undefined ? { remoteRevision } : {}),
-    dirty: Boolean(error),
-    isPublic: state?.isPublic ?? false,
-    ...(state?.declined !== undefined ? { declined: state.declined } : {}),
-  });
+    // `writeSyncState` — это `put`, полная перезапись: при ошибке нельзя молча
+    // выбросить remoteUpdatedAt, иначе доска, которая уже уезжала на сервер,
+    // после первого же обрыва сети станет неотличима от той, что не уезжала
+    // никогда. `exactOptionalPropertyTypes` не даёт положить туда `undefined`
+    // явно — если доска ни разу не доехала, ключ просто не пишем.
+    const remoteUpdatedAt = error ? state?.remoteUpdatedAt : rowUpdatedAt(saved.updated_at);
+    const remoteRevision = error ? state?.remoteRevision : (saved.revision as number);
+    await writeSyncState({
+      projectId,
+      owner: state?.owner ?? owner,
+      ...(access ? { access } : {}),
+      ...(remoteUpdatedAt !== undefined ? { remoteUpdatedAt } : {}),
+      ...(remoteRevision !== undefined ? { remoteRevision } : {}),
+      dirty: Boolean(error),
+      isPublic: state?.isPublic ?? false,
+      ...(state?.declined !== undefined ? { declined: state.declined } : {}),
+    });
 
-  return !error;
+    return !error;
+  } finally {
+    if (pushStarted) endProjectPush(projectId);
+  }
 };
 
 /**

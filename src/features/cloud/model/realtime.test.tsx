@@ -173,6 +173,7 @@ describe('applyRemoteProjectRow', () => {
       userId: 'owner-1',
       currentViewport: localViewport,
       remoteRevision: 4,
+      ownWritePending: true,
     });
 
     expect(result).toEqual({ applied: false });
@@ -182,6 +183,21 @@ describe('applyRemoteProjectRow', () => {
         remoteRevision: 5,
         remoteUpdatedAt: Date.parse(remoteRow().updated_at),
       }),
+    );
+  });
+
+  it('applies an update from another client signed in as the same user', async () => {
+    const result = await applyRemoteProjectRow(remoteRow({ updated_by: 'owner-1' }), {
+      userId: 'owner-1',
+      currentViewport: localViewport,
+      remoteRevision: 4,
+      ownWritePending: false,
+    });
+
+    expect(result).toEqual({ applied: true, name: 'Общая доска' });
+    expect(deps.overwriteProject).toHaveBeenCalledTimes(1);
+    expect(deps.writeSyncState).toHaveBeenCalledWith(
+      expect.objectContaining({ remoteRevision: 5, dirty: false }),
     );
   });
 

@@ -18,7 +18,7 @@ import type { ProjectAccess } from './access';
 import { getCloud } from './client';
 import { pullProject, remoteList } from './pull';
 import type { ProjectRow } from './push';
-import { rowUpdatedAt } from './push';
+import { isProjectPushPending, rowUpdatedAt } from './push';
 import { useSession } from './session';
 
 export interface RemoteProjectContext {
@@ -26,6 +26,7 @@ export interface RemoteProjectContext {
   currentViewport: Viewport;
   remoteRevision?: number;
   access?: ProjectAccess;
+  ownWritePending?: boolean;
   active?: () => boolean;
 }
 
@@ -81,7 +82,7 @@ export const applyRemoteProjectRow = async (
 
   // Эхо собственной записи уже находится в локальном документе. Повторная
   // загрузка породила бы лишний рендер и могла затереть более свежий штрих.
-  if (row.updated_by === context.userId) {
+  if (row.updated_by === context.userId && context.ownWritePending) {
     await writeSyncState(nextState);
     return { applied: false };
   }
@@ -163,6 +164,7 @@ export const useProjectRealtime = ({
         userId,
         currentViewport: viewport,
         access,
+        ownWritePending: isProjectPushPending(projectId),
         active: () => !stopped,
       });
       if (result.applied && !stopped) onName(result.name);
