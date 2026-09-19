@@ -33,4 +33,5 @@ export { AccessBadge } from './ui/AccessBadge';
 export { AccessDialog } from './ui/AccessDialog';
 export { AccountMenu } from './ui/AccountMenu';
 export { AdoptDialog } from './ui/AdoptDialog';
+export { OnlineParticipants } from './ui/OnlineParticipants';
 export { ShareButton } from './ui/ShareButton';

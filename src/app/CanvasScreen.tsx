@@ -12,7 +12,14 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
-import { AccessBadge, ShareButton, useCloudSync, useProjectRealtime } from '@/features/cloud';
+import {
+  AccessBadge,
+  OnlineParticipants,
+  ShareButton,
+  useCloudSync,
+  useProjectPresence,
+  useProjectRealtime,
+} from '@/features/cloud';
 import { canEdit, type ProjectAccess } from '@/features/cloud/model/access';
 import { connectRemoteImages } from '@/features/cloud/model/images';
 import { ExportMenu } from '@/features/export';
@@ -96,6 +103,9 @@ export function CanvasScreen() {
     onName: updateRemoteName,
     onRevoked: handleRevoked,
   });
+  const onlineParticipants = useProjectPresence(
+    state?.remote && !state.revoked ? projectId : undefined,
+  );
 
   useEffect(() => {
     if (!projectId) {
@@ -227,6 +237,7 @@ export function CanvasScreen() {
         {editable && <SaveIndicator />}
 
         <div className="ml-auto flex items-center gap-1.5">
+          <OnlineParticipants participants={onlineParticipants} />
           <ThemeToggle />
           {projectId && !state.revoked && (
             <ShareButton projectId={projectId} access={state.access} isPublic={state.isPublic} />
