@@ -4,7 +4,7 @@ import type Konva from 'konva';
 import { memo } from 'react';
 import { Group, Line, Rect } from 'react-konva';
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
-import { arrowHeadPoints } from '@/features/canvas/tools/drawTool';
+import { arrowHeadPoints, DEFAULT_DRAW_DASH } from '@/features/canvas/tools/drawTool';
 import type { DrawNode } from '@/shared/types/document';
 
 const SELECTION_STROKE = '#2f6fed';
@@ -35,6 +35,7 @@ function DrawViewInner({ node, selected, readOnly, onSelect, onDragEnd }: NodeVi
         strokeWidth={node.strokeWidth}
         lineCap="round"
         lineJoin="round"
+        dash={DEFAULT_DRAW_DASH}
       />
       {arrow.length > 0 && (
         <Line
