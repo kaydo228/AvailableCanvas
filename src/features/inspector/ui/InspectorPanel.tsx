@@ -8,6 +8,8 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { convertSticky } from '@/features/design/actions';
+import { DesignInspector } from '@/features/design/ui/DesignInspector';
 
 import { selectSelectedNodes, useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
@@ -26,13 +28,27 @@ import {
 
 /** Секция по типу узла. У рисунка и группы своей пока нет — общие поля. */
 const singleSection = (node: Node) => {
+  if (node.type === 'shape' && node.design) return <DesignInspector key={node.id} node={node} />;
   switch (node.type) {
     case 'shape':
       return <ShapeSection node={node} />;
     case 'text':
       return <TextSection node={node} />;
     case 'sticky':
-      return <StickySection node={node} />;
+      return (
+        <>
+          <div className="border-b border-rule p-3">
+            <button
+              type="button"
+              className="w-full rounded-md border border-rule bg-well px-3 py-2 text-sm text-ink hover:bg-paper"
+              onClick={() => convertSticky(node.id, 'mechanic')}
+            >
+              Превратить в механику
+            </button>
+          </div>
+          <StickySection node={node} />
+        </>
+      );
     case 'image':
       return <ImageSection node={node} />;
     case 'connector':
@@ -70,9 +86,13 @@ export const InspectorPanel = () => {
   }
 
   const mode = inspectorMode(nodes);
+  const designSelected =
+    mode.kind === 'single' && mode.node.type === 'shape' && Boolean(mode.node.design);
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col overflow-y-auto border-rule border-l bg-sheet">
+    <aside
+      className={`flex ${designSelected ? 'w-96' : 'w-72'} shrink-0 flex-col overflow-y-auto border-rule border-l bg-sheet`}
+    >
       <header className="flex h-11 shrink-0 items-center justify-between border-rule border-b px-3">
         <span className="label-caps text-pencil">Свойства</span>
         <button

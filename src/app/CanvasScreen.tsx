@@ -8,10 +8,11 @@
 
 import { ChevronLeft } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
+
 import {
   AccessBadge,
   OnlineParticipants,
@@ -22,6 +23,10 @@ import {
 } from '@/features/cloud';
 import { canEdit, type ProjectAccess } from '@/features/cloud/model/access';
 import { connectRemoteImages } from '@/features/cloud/model/images';
+import { focusNode } from '@/features/design/actions';
+import { DesignSidebar } from '@/features/design/ui/DesignSidebar';
+import { DesignTools } from '@/features/design/ui/DesignTools';
+
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
@@ -55,6 +60,8 @@ type LoadState =
 export function CanvasScreen() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedNode = searchParams.get('node');
   const [state, setState] = useState<LoadState>(undefined);
   const canvasRef = useRef<CanvasStageHandle>(null);
   const editable = state !== undefined && state !== null && !state.revoked && canEdit(state.access);
@@ -184,6 +191,15 @@ export function CanvasScreen() {
     };
   }, [projectId, loadDocument, closeDocument]);
 
+  useEffect(() => {
+    if (!state || !requestedNode) return;
+    const frame = requestAnimationFrame(() => {
+      if (useBoardStore.getState().document?.nodes[requestedNode]) focusNode(requestedNode);
+      else toast.info('Объект из ссылки больше не существует');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state, requestedNode]);
+
   if (state === null) {
     return (
       <main className="grid h-screen place-items-center bg-paper px-6 text-center">
@@ -238,6 +254,8 @@ export function CanvasScreen() {
 
         <div className="ml-auto flex items-center gap-1.5">
           <OnlineParticipants participants={onlineParticipants} />
+          <DesignTools name={state.name} readOnly={!editable} />
+
           <ThemeToggle />
           {projectId && !state.revoked && (
             <ShareButton projectId={projectId} access={state.access} isPublic={state.isPublic} />
@@ -247,6 +265,7 @@ export function CanvasScreen() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
+        {editable && <DesignSidebar />}
         <div className="relative flex-1 overflow-hidden">
           {editable && <Toolbar />}
           <CanvasStage

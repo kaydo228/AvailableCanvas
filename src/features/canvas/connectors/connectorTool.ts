@@ -22,7 +22,7 @@ export function createConnector(
     type: 'connector',
     from,
     to,
-    routing: 'straight',
+    routing: 'elbow',
     stroke: DEFAULT_CONNECTOR_STROKE,
     strokeWidth: DEFAULT_CONNECTOR_WIDTH,
     // Стрелка на конце по умолчанию: соединитель почти всегда направленный,

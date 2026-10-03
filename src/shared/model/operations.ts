@@ -1,3 +1,7 @@
+import { withGroupDescendants } from './hierarchy';
+
+export { withGroupDescendants } from './hierarchy';
+
 /**
  * Чистые операции над документом. Стор их вызывает, сам логику не держит.
  */
@@ -72,7 +76,16 @@ export function removeNode(document: BoardDocument, nodeId: Id): BoardDocument {
     if (id === nodeId) continue;
 
     if (node.type !== 'connector') {
-      nodes[id] = node;
+      nodes[id] =
+        node.type === 'shape' && node.design?.kind === 'section'
+          ? {
+              ...node,
+              design: {
+                ...node.design,
+                children: node.design.children.filter((child) => child !== nodeId),
+              },
+            }
+          : node;
       continue;
     }
 
@@ -159,22 +172,6 @@ export function topmostGroup(document: BoardDocument, id: Id): Id {
  * Переданные узлы вместе со всем содержимым групп, включая вложенные.
  * Порядок сохраняется, дубли убираются: узел мог прийти и сам, и через группу.
  */
-export function withGroupDescendants(document: BoardDocument, ids: Iterable<Id>): Id[] {
-  const result: Id[] = [];
-  const seen = new Set<Id>();
-
-  const visit = (id: Id): void => {
-    if (seen.has(id)) return;
-    seen.add(id);
-    result.push(id);
-
-    const node = document.nodes[id];
-    if (node?.type === 'group') for (const child of node.children) visit(child);
-  };
-
-  for (const id of ids) visit(id);
-  return result;
-}
 
 /**
  * Что уезжает в копию вместе с выделением: сами узлы, содержимое их групп
@@ -188,7 +185,20 @@ export function withGroupDescendants(document: BoardDocument, ids: Iterable<Id>)
  * Cmd+C начнут копировать разное, и объяснить это пользователю будет нечем.
  */
 export function nodesToCopy(document: BoardDocument, ids: Iterable<Id>): Id[] {
-  const result = withGroupDescendants(document, ids).filter((id) => document.nodes[id]);
+  const selected = [...ids];
+  const members = selected.flatMap((id) => {
+    const node = document.nodes[id];
+    return node?.type === 'shape' && node.design?.kind === 'section'
+      ? [
+          id,
+          ...node.design.children.filter((child) => {
+            const member = document.nodes[child];
+            return !(member?.type === 'shape' && member.design?.kind === 'section');
+          }),
+        ]
+      : [id];
+  });
+  const result = withGroupDescendants(document, members).filter((id) => document.nodes[id]);
   const taken = new Set(result);
 
   for (const node of Object.values(document.nodes)) {
@@ -318,4 +328,38 @@ export function connectorBoundsPoints(document: BoardDocument, connector: Connec
   return [0, 1, ...cubicExtrema(p0.x, p1.x, p2.x, p3.x), ...cubicExtrema(p0.y, p1.y, p2.y, p3.y)]
     .filter((t, index, all) => t >= 0 && t <= 1 && all.indexOf(t) === index)
     .map((t) => cubicPoint(cubic, t));
+}
+
+/** Images referenced by the live board or any named snapshot must survive GC/export. */
+export function imageBlobIds(document: BoardDocument): Id[] {
+  const ids = new Set<Id>();
+  for (const snapshot of [
+    document,
+    ...(document.versions ?? []).map((version) => version.snapshot),
+  ]) {
+    for (const node of Object.values(snapshot.nodes))
+      if (node.type === 'image') ids.add(node.blobId);
+  }
+  return [...ids];
+}
+
+/** A group and its descendants have one section owner, including when assigning a child. */
+export function setSectionMembership(
+  document: BoardDocument,
+  nodeId: Id,
+  sectionId: Id | null,
+): void {
+  const target = sectionId ? document.nodes[sectionId] : undefined;
+  if (sectionId && !(target?.type === 'shape' && target.design?.kind === 'section')) return;
+  const root = topmostGroup(document, nodeId);
+  const node = document.nodes[root];
+  if (!node || (node.type === 'shape' && node.design?.kind === 'section')) return;
+  const members = new Set(withGroupDescendants(document, [root]));
+  for (const section of Object.values(document.nodes)) {
+    if (section.type === 'shape' && section.design?.kind === 'section') {
+      section.design.children = section.design.children.filter((id) => !members.has(id));
+    }
+  }
+  if (target?.type === 'shape' && target.design?.kind === 'section')
+    target.design.children.push(root);
 }

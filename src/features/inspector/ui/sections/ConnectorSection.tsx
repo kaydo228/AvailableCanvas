@@ -11,6 +11,7 @@ import {
   SegmentedField,
 } from '@/features/inspector/ui/controls';
 import { useBoardStore } from '@/shared/store/board';
+import { RELATION_TYPES, type RelationType } from '@/shared/types/design';
 import type { ConnectorNode, TextStyle } from '@/shared/types/document';
 import { AppearanceSection, DashRow, LabelSection, newLabel } from './parts';
 
@@ -38,6 +39,30 @@ export const ConnectorSection = ({ node }: { node: ConnectorNode }) => {
   return (
     <>
       <Section title="Коннектор">
+        <Row label="Связь" stack>
+          <select
+            aria-label="Тип связи"
+            value={node.relation ?? ''}
+            className="w-full rounded border border-rule bg-paper p-2 text-sm text-ink"
+            onChange={(event) => {
+              const relation = event.target.value as RelationType | '';
+              if (relation)
+                patch({ relation, label: { ...newLabel(), value: RELATION_TYPES[relation] } });
+              else
+                useBoardStore.setState((state) => {
+                  const current = state.document?.nodes[node.id];
+                  if (current?.type === 'connector') delete current.relation;
+                });
+            }}
+          >
+            <option value="">Произвольная</option>
+            {Object.entries(RELATION_TYPES).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Row>
         <Row label="Форма линии" stack>
           <SegmentedField
             value={node.routing}

@@ -1,3 +1,4 @@
+import { hiddenDesignIds } from '@/features/design/model';
 /**
  * Контракт между зонами A и B.
  *
@@ -12,6 +13,9 @@ import { temporal } from 'zundo';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { createConnector } from '@/features/canvas/connectors/connectorTool';
+
+export { createConnector } from '@/features/canvas/connectors/connectorTool';
+
 import { connectorEnds, nodeEndpoint, pointEndpoint } from '@/features/canvas/connectors/geometry';
 import type { Rect, Size } from '@/features/canvas/engine/contract';
 import { DEFAULT_GRID_STEP } from '@/features/canvas/engine/grid';
@@ -38,6 +42,7 @@ import {
   groupHasRotatedDescendant,
   nodesToCopy,
   removeNodes as removeNodesFromDocument,
+  setSectionMembership,
   topmostGroup,
   withGroupDescendants,
 } from '@/shared/model/operations';
@@ -218,6 +223,21 @@ function resyncGroups(document: BoardDocument, touched: Iterable<Id>): void {
   }
 }
 
+/** Dissolving a group keeps its explicit section membership on its surviving children. */
+function replaceSectionMember(document: BoardDocument, id: Id, children: Id[]): void {
+  for (const node of Object.values(document.nodes)) {
+    if (
+      node.type === 'shape' &&
+      node.design?.kind === 'section' &&
+      node.design.children.includes(id)
+    ) {
+      node.design.children = [
+        ...new Set(node.design.children.flatMap((child) => (child === id ? children : [child]))),
+      ];
+    }
+  }
+}
+
 /** Убирает группы, которые после удаления перестали быть контейнерами. */
 function dissolveSmallGroups(document: BoardDocument): Id[] {
   const removed: Id[] = [];
@@ -238,6 +258,7 @@ function dissolveSmallGroups(document: BoardDocument): Id[] {
           .filter((id) => id !== group.id)
           .concat(childId === undefined || parent.children.includes(childId) ? [] : [childId]);
       }
+      replaceSectionMember(document, group.id, childId && child ? [childId] : []);
       delete document.nodes[group.id];
       document.order = document.order.filter((id) => id !== group.id);
       removed.push(group.id);
@@ -336,6 +357,16 @@ function duplicateNode(
   // exactOptionalPropertyTypes: undefined не присвоить, поле убирают.
   if (twinGroup === undefined) delete copy.groupId;
   else copy.groupId = twinGroup;
+
+  if (copy.type === 'shape' && copy.design) {
+    const design = copy.design;
+    if (design.kind === 'section')
+      design.children = design.children.flatMap((child) => clones.get(child) ?? []);
+    if (design.kind === 'reference')
+      design.targetId = clones.get(design.targetId) ?? design.targetId;
+    if (design.kind === 'card')
+      design.references = design.references.map((target) => clones.get(target) ?? target);
+  }
 
   if (copy.type === 'group') {
     copy.children = copy.children
@@ -561,15 +592,30 @@ export const useBoardStore = create<BoardState>()(
       moveNodes: (ids, dx, dy) =>
         set((state) => {
           if (!state.document) return;
-          for (const id of withGroupDescendants(state.document, ids)) {
+          if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+          const members = ids.flatMap((id) => {
+            const node = state.document?.nodes[id];
+            return node?.type === 'shape' && node.design?.kind === 'section'
+              ? [id, ...node.design.children]
+              : [id];
+          });
+          const moved = withGroupDescendants(state.document, members);
+          for (const id of moved) {
             const node = state.document.nodes[id];
-            if (node && node.type !== 'connector') {
+            if (!node) continue;
+            if (node.type === 'connector') {
+              for (const endpoint of [node.from, node.to])
+                if (endpoint.point) {
+                  endpoint.point.x += dx;
+                  endpoint.point.y += dy;
+                }
+            } else {
               node.x += dx;
               node.y += dy;
             }
           }
           // Рамки внешних групп, если двигали что-то изнутри.
-          resyncGroups(state.document, ids);
+          resyncGroups(state.document, moved);
         }),
       /**
        * Изменение рамки узла. Единственное место, где размер уезжает
@@ -884,7 +930,13 @@ export const useBoardStore = create<BoardState>()(
         for (const id of ids) {
           const top = topmostGroup(document, id);
           const node = document.nodes[top];
-          if (!node || node.type === 'connector' || seen.has(top)) continue;
+          if (
+            !node ||
+            node.type === 'connector' ||
+            (node.type === 'shape' && node.design?.kind === 'section') ||
+            seen.has(top)
+          )
+            continue;
           seen.add(top);
           members.push(top);
         }
@@ -918,6 +970,15 @@ export const useBoardStore = create<BoardState>()(
             const member = state.document.nodes[id];
             if (member && member.type !== 'connector') member.groupId = groupId;
           }
+
+          const contents = new Set(withGroupDescendants(state.document, members));
+          const owner = Object.values(state.document.nodes).find(
+            (section) =>
+              section.type === 'shape' &&
+              section.design?.kind === 'section' &&
+              section.design.children.some((child) => contents.has(child)),
+          );
+          if (owner) setSectionMembership(state.document, groupId, owner.id);
 
           const box = groupBounds(state.document, groupId);
           if (box) Object.assign(node, box);
@@ -965,6 +1026,7 @@ export const useBoardStore = create<BoardState>()(
             }
           }
 
+          replaceSectionMember(state.document, groupId, children);
           delete state.document.nodes[groupId];
           state.document.order = state.document.order.filter((id) => id !== groupId);
           state.selection = children;
@@ -1043,14 +1105,16 @@ export const useBoardStore = create<BoardState>()(
 
       selectAll: () =>
         set((state) => {
-          state.selection = state.document ? [...state.document.order] : [];
+          const document = state.document;
+          const hidden = document ? hiddenDesignIds(document) : new Set<string>();
+          state.selection = document ? document.order.filter((id) => !hidden.has(id)) : [];
         }),
       selectInBox: (box) =>
         set((state) => {
-          // Рамка задела участника группы — берём группу целиком: разорвать
-          // её протяжкой пользователь не просил.
-          state.selection = state.document
-            ? expandSelection(state.document, nodesInBox(state.document, box))
+          const document = state.document;
+          const hidden = document ? hiddenDesignIds(document) : new Set<string>();
+          state.selection = document
+            ? expandSelection(document, nodesInBox(document, box)).filter((id) => !hidden.has(id))
             : [];
         }),
 

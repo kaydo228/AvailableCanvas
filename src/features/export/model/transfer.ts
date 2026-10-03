@@ -1,3 +1,4 @@
+import { imageBlobIds } from '@/shared/model/operations';
 /**
  * Экспорт и импорт документа в JSON (FR-12).
  *
@@ -46,15 +47,14 @@ export const buildBoardFile = async (name: string): Promise<BoardFile> => {
   if (!document) throw new ExportFailed('Доска ещё не открыта.');
 
   const images: Record<Id, string> = {};
-  for (const node of Object.values(document.nodes)) {
-    if (node.type !== 'image' || images[node.blobId]) continue;
-    const blob = await getBlob(node.blobId);
+  for (const blobId of imageBlobIds(document)) {
+    const blob = await getBlob(blobId);
     if (!blob) {
       throw new ExportFailed(
-        `Картинка узла ${node.id} потерялась из хранилища — файл вышел бы дырявым.`,
+        `Картинка узла ${blobId} потерялась из хранилища — файл вышел бы дырявым.`,
       );
     }
-    images[node.blobId] = await toDataUrl(blob);
+    images[blobId] = await toDataUrl(blob);
   }
 
   return {
@@ -138,10 +138,7 @@ export const importJson = async (file: File): Promise<ImportResult> => {
   // Перекладываем только те картинки, на которые ссылается хоть один узел.
   // Обход по всему `images` означал, что запись, не нужную ни одному узлу,
   // приложение всё равно пойдёт читать — этим и пользовался маячок.
-  const needed = new Set<Id>();
-  for (const node of Object.values(parsed.document.nodes)) {
-    if (node.type === 'image') needed.add(node.blobId);
-  }
+  const needed = new Set(imageBlobIds(parsed.document as BoardDocument));
 
   // Картинки перекладываются ДО создания проекта: если одна из них не пройдёт
   // проверку putImage, лучше не оставлять после себя пустой проект в списке.
@@ -166,6 +163,17 @@ export const importJson = async (file: File): Promise<ImportResult> => {
     ...parsed.document,
     projectId: project.id,
     nodes: remapImages(parsed.document.nodes as Record<Id, Node>, remap),
+    ...(parsed.document.versions
+      ? {
+          versions: parsed.document.versions.map((version) => ({
+            ...version,
+            snapshot: {
+              ...version.snapshot,
+              nodes: remapImages(version.snapshot.nodes as Record<Id, Node>, remap),
+            },
+          })),
+        }
+      : {}),
   } as BoardDocument);
 
   await saveDocument(document);

@@ -9,6 +9,7 @@
  */
 
 import type { WorldPoint } from '@/features/canvas/engine/contract';
+import { hiddenDesignIds } from '@/features/design/model';
 import type {
   Anchor,
   BoardDocument,
@@ -170,18 +171,29 @@ export function straightPoints(from: WorldPoint, to: WorldPoint): number[] {
  *
  * Коннекторы пропускаем: цепляться линией за линию нельзя, у неё нет рамки.
  */
-export function nodeAtPoint(document: BoardDocument, point: WorldPoint): BoxNode | null {
+export function nodeAtPoint(
+  document: BoardDocument,
+  point: WorldPoint,
+  tolerance = 0,
+): BoxNode | null {
+  const hidden = hiddenDesignIds(document);
   for (let i = document.order.length - 1; i >= 0; i -= 1) {
     const id = document.order[i];
     if (!id) continue;
     const node = boxNode(document, id);
-    if (!node) continue;
+    if (
+      !node ||
+      hidden.has(id) ||
+      node.type === 'group' ||
+      (node.type === 'shape' && node.design?.kind === 'section')
+    )
+      continue;
 
     if (
-      point.x >= node.x &&
-      point.x <= node.x + node.width &&
-      point.y >= node.y &&
-      point.y <= node.y + node.height
+      point.x >= node.x - tolerance &&
+      point.x <= node.x + node.width + tolerance &&
+      point.y >= node.y - tolerance &&
+      point.y <= node.y + node.height + tolerance
     ) {
       return node;
     }
@@ -224,11 +236,11 @@ export const ANCHOR_SNAP_SCREEN = 18;
  * выходить линии, должна программа. Мимо фигуры — свободная точка.
  */
 export function endpointAt(document: BoardDocument, point: WorldPoint, zoom: number): Endpoint {
-  const node = nodeAtPoint(document, point);
+  const snap = ANCHOR_SNAP_SCREEN / Math.max(zoom, 1e-6);
+  const node = nodeAtPoint(document, point) ?? nodeAtPoint(document, point, snap);
   if (!node) return pointEndpoint(point);
 
   const { anchor, distance } = nearestAnchor(node, point);
-  const snap = ANCHOR_SNAP_SCREEN / Math.max(zoom, 1e-6);
 
   return nodeEndpoint(node.id, distance <= snap ? anchor : 'auto');
 }

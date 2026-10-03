@@ -6,6 +6,8 @@
  * Изменения только парой, коммитом с префиксом `contract:`.
  */
 
+import type { DesignContent, RelationType } from './design';
+
 export type Id = string;
 
 /** Меньше этого узел невозможно стабильно поймать мышью. */
@@ -37,6 +39,14 @@ export interface BoardDocument {
   order: Id[]; // порядок отрисовки снизу вверх
   viewport: Viewport;
   background: { color: string; grid: 'dots' | 'lines' | 'none' };
+  versions?: BoardVersion[];
+}
+
+export interface BoardVersion {
+  id: Id;
+  name: string;
+  createdAt: number;
+  snapshot: Pick<BoardDocument, 'nodes' | 'order' | 'background'>;
 }
 
 /**
@@ -97,6 +107,7 @@ export interface ShapeNode extends BaseNode {
   dash?: number[];
   cornerRadius?: number;
   label?: TextStyle; // подпись внутри фигуры
+  design?: DesignContent;
 }
 
 export interface TextNode extends BaseNode {
@@ -157,6 +168,7 @@ export interface ConnectorNode {
   label?: TextStyle;
   locked: boolean;
   opacity: number;
+  relation?: RelationType;
 }
 
 /** Границы зума из инварианта 5. */

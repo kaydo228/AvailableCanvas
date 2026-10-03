@@ -13,7 +13,6 @@
 
 import type { WorldPoint } from '@/features/canvas/engine/contract';
 import type { BoardDocument, ConnectorNode, Endpoint } from '@/shared/types/document';
-
 import {
   anchorPoint,
   autoAnchor,
@@ -22,6 +21,7 @@ import {
   SIDE_ANCHORS,
   type SideAnchor,
 } from './geometry';
+import { avoidObstacles } from './obstacles';
 
 /** Длина вылета из фигуры в мировых единицах. */
 export const STUB = 16;
@@ -144,8 +144,7 @@ const flatten = (points: WorldPoint[]): number[] => simplify(points).flatMap((p)
 /**
  * Ломаная под прямым углом.
  *
- * Обходятся только две фигуры, которые эта линия соединяет. Третьи фигуры
- * не обходятся: это A*-роутинг, он вне ТЗ. Ограничение осознанное.
+ * Быстрый исходный маршрут; сторонние препятствия учитывает avoidObstacles.
  */
 export function elbowPoints(from: Side, to: Side): number[] {
   const stub = stubLength(from.point, to.point);
@@ -266,7 +265,12 @@ export function connectorPoints(
 
   switch (connector.routing) {
     case 'elbow':
-      return elbowPoints(from, to);
+      return flatten(
+        avoidObstacles(elbowPoints(from, to), from, to, document, [
+          connector.from.nodeId,
+          connector.to.nodeId,
+        ]),
+      );
     case 'curve':
       return curvePoints(from, to);
     default:

@@ -6,7 +6,7 @@
  * перерисовываться вся доска.
  */
 
-import { Circle, Line } from 'react-konva';
+import { Arrow, Circle } from 'react-konva';
 
 import type { WorldPoint } from '@/features/canvas/engine/contract';
 
@@ -51,8 +51,11 @@ export function AnchorHints({
 
 function DraftLine({ draft }: { draft: ConnectorDraft }) {
   return (
-    <Line
-      points={[draft.from.x, draft.from.y, draft.to.x, draft.to.y]}
+    <Arrow
+      points={draft.points}
+      fill={ACCENT}
+      pointerLength={8}
+      pointerWidth={7}
       stroke={ACCENT}
       strokeWidth={1.5}
       strokeScaleEnabled={false}
