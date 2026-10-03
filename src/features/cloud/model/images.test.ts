@@ -3,11 +3,27 @@
  * на другом устройстве доска открылась с дырой вместо изображения.
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { doc, shape } from '@/shared/model/fixtures';
 import type { ImageNode } from '@/shared/types/document';
-import { collectBlobIds } from './images';
+import { setCloud } from './client';
+import { collectBlobIds, connectRemoteImages, downloadImage, uploadImages } from './images';
+
+const blobs = vi.hoisted(() => ({
+  getBlob: vi.fn(async () => new Blob(['image'])),
+  putBlobDirect: vi.fn(async () => undefined),
+  setRemoteBlobSource: vi.fn(),
+}));
+vi.mock('@/features/persistence/blobStore', () => blobs);
+
+const upload = vi.fn(async () => ({ error: null }));
+const download = vi.fn(async () => ({ data: new Blob(['remote']), error: null }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  setCloud({ storage: { from: () => ({ upload, download }) } } as never);
+});
 
 const image = (id: string, blobId: string): ImageNode => ({
   id,
@@ -38,5 +54,33 @@ describe('collectBlobIds', () => {
 
   it('доска без картинок — пусто', () => {
     expect(collectBlobIds(doc([shape('s1')]))).toEqual([]);
+  });
+});
+
+describe('project image paths', () => {
+  it('uploads into the project folder', async () => {
+    await uploadImages(doc([image('i1', 'blob-1')]), 'p1');
+
+    expect(upload).toHaveBeenCalledWith('p1/blob-1', expect.any(Blob), { upsert: false });
+  });
+
+  it('downloads from the project folder', async () => {
+    await downloadImage('blob-1', 'p1');
+
+    expect(download).toHaveBeenCalledWith('p1/blob-1');
+  });
+
+  it('connects and clears a project-scoped lazy source', async () => {
+    connectRemoteImages('p1');
+    const source = blobs.setRemoteBlobSource.mock.calls[0]?.[0] as (
+      blobId: string,
+    ) => Promise<Blob | undefined>;
+    await source('blob-1');
+
+    expect(download).toHaveBeenCalledWith('p1/blob-1');
+    expect(blobs.putBlobDirect).toHaveBeenCalledWith('blob-1', expect.any(Blob));
+
+    connectRemoteImages(null);
+    expect(blobs.setRemoteBlobSource).toHaveBeenLastCalledWith(null);
   });
 });

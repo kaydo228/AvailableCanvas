@@ -40,6 +40,16 @@ const stubCloudClient = () => {
         return { error: null };
       },
     },
+    rpc: async (name: string) =>
+      name === 'accept_my_project_invites'
+        ? { data: [], error: null }
+        : { data: null, error: { message: 'unknown rpc' } },
+    from: (table: string) => ({
+      select: () =>
+        table === 'project_members'
+          ? { eq: async () => ({ data: [], error: null }) }
+          : Promise.resolve({ data: [], error: null }),
+    }),
   };
 
   Object.defineProperty(window, '__cloud', {

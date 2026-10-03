@@ -17,7 +17,7 @@ vi.mock('@/features/persistence/syncStore', () => states);
 
 const select = vi.fn();
 /** Что вернёт `update(...).eq(...).select(...)` — столько строк и затронуто. */
-const updated = vi.fn(async (): Promise<unknown> => ({ data: [{ id: 'p1' }], error: null }));
+const rpc = vi.fn(async (): Promise<unknown> => ({ data: true, error: null }));
 
 const row = {
   id: 'p1',
@@ -35,12 +35,12 @@ beforeEach(() => {
   select.mockImplementation(() => ({
     eq: () => ({ single: async () => ({ data: row, error: null }) }),
   }));
-  updated.mockResolvedValue({ data: [{ id: 'p1' }], error: null });
+  rpc.mockResolvedValue({ data: true, error: null });
 
   setCloud({
+    rpc,
     from: () => ({
       select,
-      update: () => ({ eq: () => ({ select: updated }) }),
     }),
   } as never);
 });
@@ -80,11 +80,15 @@ describe('loadPublicBoard', () => {
 describe('setPublic', () => {
   it('строка изменилась — успех', async () => {
     expect(await setPublic('p1', true)).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('set_project_public', {
+      p_project_id: 'p1',
+      p_is_public: true,
+    });
   });
 
   it('не изменилось ни одной строки — это отказ, а не успех', async () => {
     // Правило доступа отсеяло чужую доску: ошибки нет, но и флаг не изменён.
-    updated.mockResolvedValue({ data: [], error: null });
+    rpc.mockResolvedValue({ data: false, error: null });
 
     expect(await setPublic('p1', true)).toBe(false);
     expect(states.writeSyncState).not.toHaveBeenCalled();

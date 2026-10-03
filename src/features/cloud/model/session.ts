@@ -87,3 +87,10 @@ export const signUp = async (email: string, password: string): Promise<AuthResul
 export const signOut = async (): Promise<void> => {
   await getCloud()?.auth.signOut();
 };
+
+export const setInvitePassword = async (password: string): Promise<string | null> => {
+  const cloud = getCloud();
+  if (!cloud) return 'Синхронизация не настроена';
+  const { error } = await cloud.auth.updateUser({ password });
+  return error ? authErrorText(error.message) : null;
+};

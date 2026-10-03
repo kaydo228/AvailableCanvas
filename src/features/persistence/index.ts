@@ -23,6 +23,7 @@ export {
   listProjects,
   MAX_PROJECT_NAME,
   overwriteProject,
+  removeRevokedProject,
   renameProject,
   type SaveOutcome,
   saveDocument,

@@ -1,8 +1,6 @@
 /**
- * Картинки в Storage. Путь — `owner/blobId`: и писать, и читать свою папку
- * может только владелец — правило `select` в базе сужено до неё же
- * (docs/cloud-setup.md). `download()` ходит через API, который правила
- * проверяет, поэтому чужую папку им не перечислить и не прочитать.
+ * Картинки в Storage. Путь — `projectId/blobId`; доступ к папке проверяется
+ * теми же ролями проекта, что и доступ к его документу.
  *
  * Что остаётся доступно постороннему: bucket публичный, значит файл можно
  * скачать по точному публичному адресу `.../object/public/images/owner/blobId`
@@ -34,7 +32,10 @@ export const collectBlobIds = imageBlobIds;
  * сервере окажется документ со ссылкой на файл, которого там нет, а на
  * другом устройстве это откроется дырой вместо картинки, и само не починится.
  */
-export const uploadImages = async (document: BoardDocument, owner: string): Promise<boolean> => {
+export const uploadImages = async (
+  document: BoardDocument,
+  projectId: string,
+): Promise<boolean> => {
   const cloud = getCloud();
   if (!cloud) return true;
 
@@ -43,7 +44,7 @@ export const uploadImages = async (document: BoardDocument, owner: string): Prom
     if (!blob) continue;
 
     // upsert: false — файл неизменяемый, второй раз его заливать незачем.
-    const { error } = await cloud.storage.from(BUCKET).upload(`${owner}/${blobId}`, blob, {
+    const { error } = await cloud.storage.from(BUCKET).upload(`${projectId}/${blobId}`, blob, {
       upsert: false,
     });
     // «Уже есть» — код 409, нормальный исход повторной выгрузки, не ошибка.
@@ -54,11 +55,11 @@ export const uploadImages = async (document: BoardDocument, owner: string): Prom
   return true;
 };
 
-export const downloadImage = async (blobId: Id, owner: string): Promise<Blob | undefined> => {
+export const downloadImage = async (blobId: Id, projectId: Id): Promise<Blob | undefined> => {
   const cloud = getCloud();
   if (!cloud) return undefined;
 
-  const { data } = await cloud.storage.from(BUCKET).download(`${owner}/${blobId}`);
+  const { data } = await cloud.storage.from(BUCKET).download(`${projectId}/${blobId}`);
   return data ?? undefined;
 };
 
@@ -66,14 +67,14 @@ export const downloadImage = async (blobId: Id, owner: string): Promise<Blob | u
  * Подключает фолбэк: `blobStore` не знает про облако и не должен — иначе
  * зона хранения начинает зависеть от зоны синхронизации, а не наоборот.
  */
-export const connectRemoteImages = (owner: string | null): void => {
-  if (!owner) {
+export const connectRemoteImages = (projectId: Id | null): void => {
+  if (!projectId) {
     setRemoteBlobSource(null);
     return;
   }
 
   setRemoteBlobSource(async (blobId) => {
-    const blob = await downloadImage(blobId, owner);
+    const blob = await downloadImage(blobId, projectId);
     // Скачали — кладём локально: второй раз за тем же файлом в сеть не ходим.
     if (blob) await putBlobDirect(blobId, blob);
     return blob;

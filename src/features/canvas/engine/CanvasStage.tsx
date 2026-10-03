@@ -36,8 +36,8 @@ export type CanvasStageHandle = { captureThumbnail: () => Promise<void> };
 
 export const CanvasStage = forwardRef<
   CanvasStageHandle,
-  { onThumbnail?: (thumbnail: string) => void | Promise<void> }
->(function CanvasStage({ onThumbnail }, ref) {
+  { onThumbnail?: (thumbnail: string) => void | Promise<void>; readOnly?: boolean }
+>(function CanvasStage({ onThumbnail, readOnly = false }, ref) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const konvaRef = useRef<Konva.Stage | null>(null);
   const [size, setSize] = useState<Size>({ width: 0, height: 0 });
@@ -48,10 +48,10 @@ export const CanvasStage = forwardRef<
   const setViewport = useBoardStore((s) => s.setViewport);
   const setCanvasSize = useBoardStore((s) => s.setCanvasSize);
 
-  const tools = useToolController();
+  const tools = useToolController(!readOnly);
   // Холст — единственная точка подписки на Cmd+V, см. ImageInsertOptions.
-  const images = useImageInsert({ paste: true });
-  const connectors = useConnectorTool();
+  const images = useImageInsert({ enabled: !readOnly, paste: true });
+  const connectors = useConnectorTool(!readOnly);
 
   const captureThumbnail = useCallback(async () => {
     const stage = konvaRef.current;
@@ -123,8 +123,7 @@ export const CanvasStage = forwardRef<
       role="application"
       aria-label="Холст доски"
       {...gestureProps}
-      onDragOver={images.onDragOver}
-      onDrop={images.onDrop}
+      {...(readOnly ? {} : { onDragOver: images.onDragOver, onDrop: images.onDrop })}
       ref={(el) => {
         hostRef.current = el;
         gestureProps.ref?.(el);
@@ -159,7 +158,7 @@ export const CanvasStage = forwardRef<
       >
         <GridLayer viewport={viewport} size={size} />
         <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
-          <NodesLayer />
+          <NodesLayer readOnly={readOnly} />
           <PreviewNode node={tools.preview} />
         </Layer>
 
@@ -171,11 +170,11 @@ export const CanvasStage = forwardRef<
         <Layer x={viewport.x} y={viewport.y} scaleX={viewport.zoom} scaleY={viewport.zoom}>
           <MarqueeRect box={tools.marquee} />
           <AnchorHints hint={connectors.hint} draft={connectors.draft} />
-          <SelectionTransformer />
+          <SelectionTransformer readOnly={readOnly} />
         </Layer>
       </Stage>
 
-      <EditingOverlay />
+      <EditingOverlay readOnly={readOnly} />
     </div>
   );
 });

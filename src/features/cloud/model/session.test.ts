@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setCloud } from './client';
-import { authErrorText, signUp } from './session';
+import { authErrorText, setInvitePassword, signUp } from './session';
 
 afterEach(() => setCloud(null));
 
@@ -49,5 +49,27 @@ describe('signUp', () => {
       password: 'secret123',
       options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
     });
+  });
+});
+
+describe('setInvitePassword', () => {
+  it('updates the invited account password', async () => {
+    const updateUser = vi.fn(async () => ({ error: null }));
+    setCloud({ auth: { updateUser } } as never);
+
+    await expect(setInvitePassword('secret123')).resolves.toBeNull();
+    expect(updateUser).toHaveBeenCalledWith({ password: 'secret123' });
+  });
+
+  it('translates password errors', async () => {
+    setCloud({
+      auth: {
+        updateUser: vi.fn(async () => ({
+          error: { message: 'Password should be at least 6 characters' },
+        })),
+      },
+    } as never);
+
+    await expect(setInvitePassword('123')).resolves.toBe('Пароль короче шести символов');
   });
 });

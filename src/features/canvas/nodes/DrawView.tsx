@@ -4,12 +4,12 @@ import type Konva from 'konva';
 import { memo } from 'react';
 import { Group, Line, Rect } from 'react-konva';
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
-import { arrowHeadPoints } from '@/features/canvas/tools/drawTool';
+import { arrowHeadPoints, DEFAULT_DRAW_DASH } from '@/features/canvas/tools/drawTool';
 import type { DrawNode } from '@/shared/types/document';
 
 const SELECTION_STROKE = '#2f6fed';
 
-function DrawViewInner({ node, selected, onSelect, onDragEnd }: NodeViewProps<DrawNode>) {
+function DrawViewInner({ node, selected, readOnly, onSelect, onDragEnd }: NodeViewProps<DrawNode>) {
   const arrow = arrowHeadPoints(node.points, node.strokeWidth);
 
   return (
@@ -20,7 +20,7 @@ function DrawViewInner({ node, selected, onSelect, onDragEnd }: NodeViewProps<Dr
       y={node.y}
       rotation={node.rotation}
       opacity={node.opacity}
-      draggable={!node.locked}
+      draggable={!readOnly && !node.locked}
       onClick={(event: Konva.KonvaEventObject<MouseEvent>) => {
         event.cancelBubble = true;
         onSelect(node.id, event.evt.shiftKey);
@@ -35,6 +35,7 @@ function DrawViewInner({ node, selected, onSelect, onDragEnd }: NodeViewProps<Dr
         strokeWidth={node.strokeWidth}
         lineCap="round"
         lineJoin="round"
+        dash={DEFAULT_DRAW_DASH}
       />
       {arrow.length > 0 && (
         <Line

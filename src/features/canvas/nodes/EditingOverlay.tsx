@@ -17,14 +17,14 @@ import { useBoardStore } from '@/shared/store/board';
 const LABEL_WIDTH = 160;
 const LABEL_HEIGHT = 28;
 
-export function EditingOverlay() {
+export function EditingOverlay({ readOnly = false }: { readOnly?: boolean }) {
   const editingNodeId = useBoardStore((s) => s.editingNodeId);
   const document = useBoardStore((s) => s.document);
   const updateNode = useBoardStore((s) => s.updateNode);
   const removeNodes = useBoardStore((s) => s.removeNodes);
   const stopEditing = useBoardStore((s) => s.stopEditing);
 
-  if (!editingNodeId || !document) return null;
+  if (readOnly || !editingNodeId || !document) return null;
 
   const node = document.nodes[editingNodeId];
   if (!node) return null;

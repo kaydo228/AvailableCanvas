@@ -22,7 +22,9 @@ const openFreshProject = async (page: import('@playwright/test').Page, name: str
   await expect(page.locator('canvas').first()).toBeVisible();
 };
 
-test('индикатор проходит путь «Сохранение…» → «Все изменения сохранены»', async ({ page }) => {
+test('индикатор не показывает загрузку и сообщает только о завершённом сохранении', async ({
+  page,
+}) => {
   await openFreshProject(page, 'Индикатор');
 
   // До первой правки индикатора нет: обещать «всё сохранено» нечего.
@@ -30,7 +32,8 @@ test('индикатор проходит путь «Сохранение…» �
 
   await page.evaluate(() => window.__board.getState().panBy(40, 25));
 
-  await expect(page.getByText('Сохранение…')).toBeVisible();
+  await expect(page.getByText('Сохранение…')).toHaveCount(0);
+  await expect(page.locator('[data-save-status="saving"]')).toHaveCount(0);
   await expect(page.getByText('Все изменения сохранены')).toBeVisible();
 });
 

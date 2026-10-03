@@ -42,9 +42,11 @@ const RENDERERS = {
   group: GroupView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
 
+
 export const NodesLayer = memo(function NodesLayer() {
   useBoardStore(useShallow((s) => [s.document?.nodes, s.document?.order]));
   const document = useBoardStore.getState().document;
+
   const selection = useBoardStore((s) => s.selection);
   const editingNodeId = useBoardStore((s) => s.editingNodeId);
   const select = useBoardStore((s) => s.select);
@@ -75,8 +77,10 @@ export const NodesLayer = memo(function NodesLayer() {
   );
 
   const handleDragEnd = useCallback(
-    (nodeId: string, x: number, y: number) => updateNode(nodeId, { x, y }),
-    [updateNode],
+    (nodeId: string, x: number, y: number) => {
+      if (!readOnly) updateNode(nodeId, { x, y });
+    },
+    [readOnly, updateNode],
   );
 
   const handleEdit = useCallback(
@@ -116,9 +120,13 @@ export const NodesLayer = memo(function NodesLayer() {
        * Поймано вживую — линия рисовалась, но фигура при этом уезжала.
        */
       listening={activeTool === 'select'}
-      onDragStart={groupDrag.onDragStart}
-      onDragMove={groupDrag.onDragMove}
-      onDragEnd={groupDrag.onDragEnd}
+      {...(readOnly
+        ? {}
+        : {
+            onDragStart: groupDrag.onDragStart,
+            onDragMove: groupDrag.onDragMove,
+            onDragEnd: groupDrag.onDragEnd,
+          })}
     >
       {ordered.map((id) => {
         const node = document.nodes[id];
@@ -149,6 +157,7 @@ export const NodesLayer = memo(function NodesLayer() {
             key={id}
             node={node}
             selected={selected.has(id)}
+            readOnly={readOnly}
             editing={editingNodeId === id}
             onSelect={handleSelect}
             onStartEditing={handleEdit}

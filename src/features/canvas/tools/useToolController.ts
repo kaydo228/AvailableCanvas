@@ -21,7 +21,7 @@ import { DEFAULT_TEXT_COLOR, textFromDrag } from './textTool';
 /** Инструменты, которые создают узлы. Остальные жест не перехватывают. */
 const CREATING = new Set(['rect', 'ellipse', 'diamond', 'hexagon', 'heptagon', 'text', 'sticky']);
 
-export function useToolController() {
+export function useToolController(enabled = true) {
   const activeTool = useBoardStore((s) => s.activeTool);
   const viewport = useBoardStore((s) => s.document?.viewport);
   const addNode = useBoardStore((s) => s.addNode);
@@ -37,7 +37,9 @@ export function useToolController() {
   // это не будущий узел, а временная геометрия.
   const [marquee, setMarquee] = useState<Rect | null>(null);
 
+
   const creating = CREATING.has(activeTool);
+
 
   const pointerWorld = useCallback(
     (stage: Konva.Stage | null): WorldPoint | null => {
@@ -77,6 +79,7 @@ export function useToolController() {
 
   const onMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!enabled) return;
       // Клик по пустому месту снимает выделение — но только инструментом
       // «Выбор», иначе создание узла заодно гасило бы выделение зря.
       if (!creating) {
@@ -98,6 +101,7 @@ export function useToolController() {
 
   const onMouseMove = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!enabled) return;
       if (!start.current) return;
       const point = pointerWorld(event.target.getStage());
       if (!point) return;
@@ -120,6 +124,7 @@ export function useToolController() {
 
   const onMouseUp = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!enabled) return;
       const from = start.current;
       start.current = null;
       setPreview(null);

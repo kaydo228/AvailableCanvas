@@ -79,8 +79,8 @@ const publicRow = (): Row => ({
         id: 'shape-shared',
         type: 'shape',
         shape: 'rect',
-        x: 10,
-        y: 10,
+        x: 260,
+        y: 180,
         width: 80,
         height: 40,
         rotation: 0,
@@ -96,6 +96,75 @@ const publicRow = (): Row => ({
     background: { color: '#fbfbfd', grid: 'dots' },
   },
 });
+
+const documentContent = async (page: import('@playwright/test').Page) =>
+  page.evaluate(() => {
+    const document = window.__board.getState().document;
+    if (!document) return null;
+    return structuredClone({
+      nodes: document.nodes,
+      order: document.order,
+      background: document.background,
+    });
+  });
+
+const tryToEditBoard = async (page: import('@playwright/test').Page) => {
+  const canvas = page.getByRole('application', { name: 'Холст доски' });
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Холст не имеет размеров');
+
+  const point = { x: box.x + 300, y: box.y + 200 };
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(point.x + 80, point.y + 50, { steps: 5 });
+  await page.mouse.up();
+  await page.mouse.dblclick(point.x, point.y);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Delete');
+
+  await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    transfer.setData(
+      'text/plain',
+      JSON.stringify({
+        format: 'prostor-nodes',
+        version: 1,
+        nodes: [
+          {
+            id: 'pasted-by-viewer',
+            type: 'shape',
+            shape: 'rect',
+            x: 80,
+            y: 80,
+            width: 80,
+            height: 40,
+            rotation: 0,
+            opacity: 1,
+            locked: false,
+            fill: '#ff0000',
+            stroke: '#111111',
+            strokeWidth: 1,
+          },
+        ],
+      }),
+    );
+    window.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: transfer }));
+  });
+
+  await canvas.evaluate((element) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File(
+        [
+          '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="red"/></svg>',
+        ],
+        'viewer.svg',
+        { type: 'image/svg+xml' },
+      ),
+    );
+    element.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+  });
+};
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -121,6 +190,78 @@ test('доска по ссылке открывается без входа: у�
   await expect(page.getByRole('button', { name: 'Выбор (V)' })).toHaveCount(0);
   // Выгрузка есть: она читает доску и ничего в ней не меняет.
   await expect(page.getByRole('button', { name: 'Экспорт' })).toBeVisible();
+});
+
+test('публичную доску нельзя изменить мышью, клавиатурой или сбросом файла', async ({ page }) => {
+  await page.addInitScript(stubCloudClient, [publicRow()]);
+  await page.goto('/s/shared-1');
+  await expect(page.locator('canvas').first()).toBeVisible();
+
+  const before = await documentContent(page);
+  await tryToEditBoard(page);
+
+  expect(await documentContent(page)).toEqual(before);
+  await expect(page.locator('textarea')).toHaveCount(0);
+});
+
+test('участник с ролью viewer видит доску, но не может её изменить', async ({ page }) => {
+  await page.getByRole('button', { name: 'Создать проект' }).last().click();
+  await page.getByLabel('Имя проекта').fill('Доска зрителя');
+  await page.getByRole('button', { name: 'Создать' }).click();
+  await expect(page.locator('canvas').first()).toBeVisible();
+
+  const projectId = page.url().split('/').at(-1);
+  if (!projectId) throw new Error('Не удалось определить id проекта');
+
+  await page.evaluate(async (id) => {
+    const store = window.__board.getState();
+    store.addNode({
+      id: 'shape-viewer',
+      type: 'shape',
+      shape: 'rect',
+      x: 260,
+      y: 180,
+      width: 80,
+      height: 40,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      fill: '#ff0000',
+      stroke: '#111111',
+      strokeWidth: 1,
+    });
+
+    const request = indexedDB.open('prostor');
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction('sync', 'readwrite');
+    tx.objectStore('sync').put({
+      projectId: id,
+      owner: 'another-user',
+      access: 'viewer',
+      remoteUpdatedAt: Date.now(),
+      remoteRevision: 1,
+      dirty: false,
+      isPublic: false,
+    });
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }, projectId);
+
+  await expect(page.getByText('Все изменения сохранены')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Только просмотр')).toBeVisible();
+
+  const before = await documentContent(page);
+  await tryToEditBoard(page);
+
+  expect(await documentContent(page)).toEqual(before);
+  await expect(page.getByRole('button', { name: 'Выбор (V)' })).toHaveCount(0);
+  await expect(page.locator('textarea')).toHaveCount(0);
 });
 
 test('закрытая доска даёт понятное состояние, а не белый лист', async ({ page }) => {

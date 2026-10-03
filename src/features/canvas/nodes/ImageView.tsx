@@ -20,6 +20,7 @@ const PLACEHOLDER_FILL = '#eef0f3';
 function ImageViewInner({
   node,
   selected,
+  readOnly,
   onSelect,
   onStartEditing,
   onDragEnd,
@@ -49,10 +50,11 @@ function ImageViewInner({
       y={node.y}
       rotation={node.rotation}
       opacity={node.opacity}
-      draggable={!node.locked}
+      draggable={!readOnly && !node.locked}
       onClick={handleClick}
       onDblClick={(event) => {
         event.cancelBubble = true;
+        if (readOnly) return;
         onStartEditing(node.id);
       }}
       onDragEnd={(event) => onDragEnd(node.id, event.target.x(), event.target.y())}

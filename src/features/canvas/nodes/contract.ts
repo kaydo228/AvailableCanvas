@@ -13,6 +13,8 @@ import type { Id, Node } from '@/shared/types/document';
 export interface NodeViewProps<T extends Node = Node> {
   node: T;
   selected: boolean;
+  /** Просмотр без любых изменений документа. */
+  readOnly: boolean;
   /** Клик по узлу. additive — был зажат Shift. */
   onSelect: (id: Id, additive: boolean) => void;
   /** Двойной клик: просьба открыть оверлей ввода текста. */

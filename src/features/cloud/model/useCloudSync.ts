@@ -19,6 +19,7 @@ import { useEffect } from 'react';
 import { useSaveStatus } from '@/features/persistence/autosave';
 import type { Id } from '@/shared/types/document';
 
+import { canEdit, type ProjectAccess } from './access';
 import { pushProject } from './push';
 import { useSession } from './session';
 
@@ -40,11 +41,14 @@ const reportPushResult = (ok: boolean): void => {
   }
 };
 
-export const useCloudSync = (projectId: Id | undefined): void => {
+export const useCloudSync = (
+  projectId: Id | undefined,
+  access: ProjectAccess | undefined,
+): void => {
   const userId = useSession((s) => s.userId);
 
   useEffect(() => {
-    if (!projectId || !userId) return;
+    if (!projectId || !userId || !canEdit(access)) return;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -69,5 +73,5 @@ export const useCloudSync = (projectId: Id | undefined): void => {
         void pushProject(projectId, userId).then(reportPushResult);
       }
     };
-  }, [projectId, userId]);
+  }, [access, projectId, userId]);
 };

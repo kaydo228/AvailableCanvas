@@ -6,6 +6,7 @@
  * менять контракт из-за детали одной зоны.
  */
 
+import type { ProjectAccess } from '@/features/cloud/model/access';
 import type { Id } from '@/shared/types/document';
 import { getDB as db } from './db';
 
@@ -13,8 +14,12 @@ export interface SyncState {
   projectId: Id;
   /** Владелец, за которым закреплена доска. Нет — доска ничья, локальная. */
   owner?: string;
+  /** Текущая роль пользователя в проекте. */
+  access?: ProjectAccess;
   /** `updatedAt` версии, которая точно доехала до сервера. */
   remoteUpdatedAt?: number;
+  /** Монотонная версия серверного документа. */
+  remoteRevision?: number;
   /** Есть локальные правки, не уехавшие на сервер. */
   dirty: boolean;
   /** Опубликована ли доска по ссылке. Хранится здесь, чтобы выгрузка

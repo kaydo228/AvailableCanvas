@@ -34,7 +34,7 @@ const stubCloudClient = ({ png, uploadError }: StubOptions) => {
   let onChange: ((event: string, session: FakeSession | null) => void) | null = null;
 
   window.__downloads = [];
-  window.__upserts = [];
+  window.__saveProjectCalls = [];
 
   const toBlob = (base64: string): Blob => {
     const binary = atob(base64);
@@ -62,14 +62,26 @@ const stubCloudClient = ({ png, uploadError }: StubOptions) => {
         return { error: null };
       },
     },
-    from: (_table: string) => ({
-      upsert: async (row: Window['__upserts'][number]) => {
-        window.__upserts.push(row);
-        return { error: null };
-      },
-      select: (_columns: string) => ({
-        eq: async () => ({ data: [], error: null }),
-      }),
+    rpc: async (name: string, args?: Record<string, unknown>) => {
+      if (name === 'accept_my_project_invites') return { data: [], error: null };
+      if (name !== 'save_project') return { data: null, error: { message: 'unknown rpc' } };
+      window.__saveProjectCalls.push(args as Window['__saveProjectCalls'][number]);
+      return {
+        data: [
+          {
+            revision: window.__saveProjectCalls.length,
+            updated_at: new Date().toISOString(),
+            updated_by: user.id,
+          },
+        ],
+        error: null,
+      };
+    },
+    from: (table: string) => ({
+      select: () =>
+        table === 'project_members'
+          ? { eq: async () => ({ data: [], error: null }) }
+          : Promise.resolve({ data: [], error: null }),
       delete: () => ({ eq: async () => ({ error: null }) }),
     }),
     storage: {
@@ -81,6 +93,18 @@ const stubCloudClient = ({ png, uploadError }: StubOptions) => {
         },
       }),
     },
+    channel: () => {
+      const channel = {
+        on: () => channel,
+        subscribe: (callback?: (status: string) => void) => {
+          callback?.('SUBSCRIBED');
+          return channel;
+        },
+      };
+      return channel;
+    },
+    removeChannel: async () => 'ok',
+    realtime: { setAuth: async () => {} },
   };
 
   Object.defineProperty(window, '__cloud', {
@@ -130,6 +154,27 @@ const createProject = async (page: import('@playwright/test').Page, name: string
   await expect(page.locator('canvas').first()).toBeVisible();
   return page.url().split('/p/')[1] as string;
 };
+
+const markProjectRemote = (page: import('@playwright/test').Page, projectId: string) =>
+  page.evaluate(async (id) => {
+    const request = indexedDB.open('prostor');
+    const db = await new Promise<IDBDatabase>((resolve) => {
+      request.onsuccess = () => resolve(request.result);
+    });
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction('sync', 'readwrite');
+      tx.objectStore('sync').put({
+        projectId: id,
+        owner: 'user-1',
+        access: 'owner',
+        remoteUpdatedAt: Date.now(),
+        remoteRevision: 1,
+        dirty: false,
+        isPublic: false,
+      });
+      tx.oncomplete = () => resolve();
+    });
+  }, projectId);
 
 /** Узел-картинка со «серверным» blobId — файла под ним локально ещё нет. */
 const addRemoteImage = (page: import('@playwright/test').Page, blobId: string) =>
@@ -195,19 +240,22 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('картинка без локального файла скачивается один раз по owner/blobId, а второй раз в сеть не идёт', async ({
+test('картинка без локального файла скачивается один раз по projectId/blobId, а второй раз в сеть не идёт', async ({
   page,
 }) => {
   await page.addInitScript(stubCloudClient, { png: PNG_BASE64 });
   await page.goto('/');
 
   await signIn(page);
-  await createProject(page, 'Доска с чужой картинкой');
+  const projectId = await createProject(page, 'Доска с чужой картинкой');
+  await markProjectRemote(page, projectId);
+  await page.reload();
+  await expect(page.locator('canvas').first()).toBeVisible();
   await addRemoteImage(page, 'server-blob-1');
 
   // Скачивание ленивое: ждём, пока ImageView сам попросит файл при рендере.
   await expect.poll(() => page.evaluate(() => window.__downloads.length)).toBe(1);
-  expect(await page.evaluate(() => window.__downloads)).toEqual(['user-1/server-blob-1']);
+  expect(await page.evaluate(() => window.__downloads)).toEqual([`${projectId}/server-blob-1`]);
 
   // Уход с холста освобождает кэш элементов картинок (releaseImageCache) —
   // повторное открытие честно перечитывает blobStore, а не отдаёт кэш из памяти.
@@ -249,7 +297,7 @@ test('настоящая ошибка выгрузки картинки не д�
 
   // Строка доски не должна была уйти вовсе: иначе на сервере лежал бы документ
   // со ссылкой на файл, которого там нет.
-  expect(await page.evaluate(() => window.__upserts.length)).toBe(0);
+  expect(await page.evaluate(() => window.__saveProjectCalls.length)).toBe(0);
 });
 
 test('ошибка 409 («уже есть») выгрузку не ломает — строка доски уходит, dirty не ставится', async ({
@@ -265,7 +313,9 @@ test('ошибка 409 («уже есть») выгрузку не ломает 
   const projectId = await createProject(page, 'Доска с уже выгруженной картинкой');
   await addLocalImage(page);
 
-  await expect.poll(() => page.evaluate(() => window.__upserts.length), { timeout: 8000 }).toBe(1);
+  await expect
+    .poll(() => page.evaluate(() => window.__saveProjectCalls.length), { timeout: 8000 })
+    .toBe(1);
 
   const state = (await readSyncState(page, projectId)) as { dirty: boolean } | undefined;
   expect(state?.dirty).toBe(false);

@@ -9,6 +9,8 @@
 import type { SyncState } from '@/features/persistence/syncStore';
 import type { Id } from '@/shared/types/document';
 
+import type { ProjectAccess } from './access';
+
 export interface LocalBoard {
   projectId: Id;
   updatedAt: number;
@@ -17,7 +19,10 @@ export interface LocalBoard {
 
 export interface RemoteBoard {
   id: Id;
+  owner: string;
   updatedAt: number;
+  revision: number;
+  access: ProjectAccess;
 }
 
 export type Decision =
@@ -32,7 +37,8 @@ export function decide(local: LocalBoard[], remote: RemoteBoard[], owner: string
 
   for (const board of local) {
     const { projectId, state } = board;
-    const mine = state?.owner === undefined || state.owner === owner;
+    const shared = state?.access === 'editor' || state?.access === 'viewer';
+    const mine = state?.owner === undefined || state.owner === owner || shared;
     // Доска другого пользователя на этом же устройстве — не трогаем целиком.
     // Удаляем из remoteById, чтобы второй цикл не добавил pull для того же id:
     // безопаснее не синхронизировать, чем молча перезаписать чужую доску.
@@ -45,8 +51,22 @@ export function decide(local: LocalBoard[], remote: RemoteBoard[], owner: string
     const twin = remoteById.get(projectId);
     if (twin) {
       remoteById.delete(projectId);
+      if (state?.access === 'viewer' || twin.access === 'viewer') {
+        const changed =
+          state?.dirty === true ||
+          board.updatedAt !== twin.updatedAt ||
+          state?.remoteRevision !== twin.revision ||
+          state?.access !== twin.access;
+        decisions.push({ kind: changed ? 'pull' : 'nothing', projectId });
+        continue;
+      }
       if (board.updatedAt > twin.updatedAt) decisions.push({ kind: 'push', projectId });
       else if (board.updatedAt < twin.updatedAt) decisions.push({ kind: 'pull', projectId });
+      else if (
+        (state?.access !== undefined && state.access !== twin.access) ||
+        (state?.remoteRevision !== undefined && state.remoteRevision !== twin.revision)
+      )
+        decisions.push({ kind: 'pull', projectId });
       else decisions.push({ kind: state?.dirty ? 'push' : 'nothing', projectId });
       continue;
     }
@@ -55,7 +75,9 @@ export function decide(local: LocalBoard[], remote: RemoteBoard[], owner: string
     // Но невыгруженные правки живут только здесь: «удалили с другого
     // устройства» и «не успели выгрузить» с сервера выглядят одинаково,
     // а восстановить снесённое нечем — поэтому dirty оставляем как есть.
-    if (state?.remoteUpdatedAt !== undefined) {
+    if (shared) {
+      decisions.push({ kind: 'delete-local', projectId });
+    } else if (state?.remoteUpdatedAt !== undefined) {
       decisions.push({ kind: state.dirty ? 'nothing' : 'delete-local', projectId });
     } else if (state?.owner === owner) {
       decisions.push({ kind: 'push', projectId });

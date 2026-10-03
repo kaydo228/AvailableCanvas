@@ -16,12 +16,19 @@ const local = (projectId: string, updatedAt: number, state?: object) => ({
   updatedAt,
   ...(state ? { state: { projectId, dirty: false, ...state } } : {}),
 });
+const remote = (id: string, updatedAt: number) => ({
+  id,
+  owner: ME,
+  updatedAt,
+  revision: 1,
+  access: 'owner' as const,
+});
 
 describe('decide', () => {
   it('локальная новее — выгружаем', () => {
     const out = decide(
       [local('a', 200, { owner: ME, remoteUpdatedAt: 100 })],
-      [{ id: 'a', updatedAt: 100 }],
+      [remote('a', 100)],
       ME,
     );
     expect(out).toEqual([{ kind: 'push', projectId: 'a' }]);
@@ -30,7 +37,7 @@ describe('decide', () => {
   it('на сервере новее — скачиваем', () => {
     const out = decide(
       [local('a', 100, { owner: ME, remoteUpdatedAt: 100 })],
-      [{ id: 'a', updatedAt: 200 }],
+      [remote('a', 200)],
       ME,
     );
     expect(out).toEqual([{ kind: 'pull', projectId: 'a' }]);
@@ -39,7 +46,7 @@ describe('decide', () => {
   it('времена равны и правок нет — ничего', () => {
     const out = decide(
       [local('a', 100, { owner: ME, remoteUpdatedAt: 100 })],
-      [{ id: 'a', updatedAt: 100 }],
+      [remote('a', 100)],
       ME,
     );
     expect(out).toEqual([{ kind: 'nothing', projectId: 'a' }]);
@@ -48,7 +55,7 @@ describe('decide', () => {
   it('времена равны, но есть невыгруженные правки — выгружаем', () => {
     const out = decide(
       [local('a', 100, { owner: ME, remoteUpdatedAt: 100, dirty: true })],
-      [{ id: 'a', updatedAt: 100 }],
+      [remote('a', 100)],
       ME,
     );
     expect(out).toEqual([{ kind: 'push', projectId: 'a' }]);
@@ -88,15 +95,58 @@ describe('decide', () => {
     // второй цикл не должен добавить pull. Иначе получатся два решения на один id.
     const out = decide(
       [local('a', 100, { owner: 'user-2', remoteUpdatedAt: 100 })],
-      [{ id: 'a', updatedAt: 100 }],
+      [remote('a', 100)],
       ME,
     );
     expect(out).toEqual([{ kind: 'nothing', projectId: 'a' }]);
   });
 
   it('есть на сервере, нет локально — скачиваем', () => {
-    expect(decide([], [{ id: 'b', updatedAt: 500 }], ME)).toEqual([
-      { kind: 'pull', projectId: 'b' },
-    ]);
+    expect(
+      decide([], [{ id: 'b', owner: ME, updatedAt: 500, revision: 1, access: 'owner' }], ME),
+    ).toEqual([{ kind: 'pull', projectId: 'b' }]);
+  });
+
+  it('viewer never pushes local changes', () => {
+    const out = decide(
+      [
+        local('shared', 200, {
+          owner: 'user-2',
+          access: 'viewer',
+          remoteUpdatedAt: 100,
+          remoteRevision: 2,
+          dirty: true,
+        }),
+      ],
+      [
+        {
+          id: 'shared',
+          owner: 'user-2',
+          updatedAt: 100,
+          revision: 2,
+          access: 'viewer',
+        },
+      ],
+      ME,
+    );
+
+    expect(out).toEqual([{ kind: 'pull', projectId: 'shared' }]);
+  });
+
+  it('shared project removed from a successful remote list is deleted locally', () => {
+    const out = decide(
+      [
+        local('shared', 200, {
+          owner: 'user-2',
+          access: 'viewer',
+          remoteRevision: 2,
+          dirty: true,
+        }),
+      ],
+      [],
+      ME,
+    );
+
+    expect(out).toEqual([{ kind: 'delete-local', projectId: 'shared' }]);
   });
 });
