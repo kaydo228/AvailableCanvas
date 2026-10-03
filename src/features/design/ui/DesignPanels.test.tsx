@@ -57,6 +57,17 @@ beforeEach(() =>
 afterEach(cleanup);
 
 describe('design panels', () => {
+  it('keeps reading available but removes version controls when editing is revoked', () => {
+    const { rerender } = render(<DesignTools name="Game" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Версии' }));
+    expect(screen.getByRole('button', { name: 'Сохранить версию' })).toBeTruthy();
+    rerender(<DesignTools name="Game" readOnly />);
+    expect(screen.queryByRole('button', { name: 'Сохранить версию' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Версии' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Читать диздок' }));
+    expect(screen.getByRole('button', { name: 'Скачать Markdown' })).toBeTruthy();
+  });
+
   it('edits canonical card fields, table cells and comments in the real document', () => {
     render(<Inspector />);
     fireEvent.change(screen.getByLabelText('Название карточки'), {

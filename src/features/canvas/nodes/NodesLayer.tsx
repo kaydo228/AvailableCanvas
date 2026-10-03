@@ -42,8 +42,7 @@ const RENDERERS = {
   group: GroupView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
 
-
-export const NodesLayer = memo(function NodesLayer() {
+export const NodesLayer = memo(function NodesLayer({ readOnly = false }: { readOnly?: boolean }) {
   useBoardStore(useShallow((s) => [s.document?.nodes, s.document?.order]));
   const document = useBoardStore.getState().document;
 
@@ -85,19 +84,24 @@ export const NodesLayer = memo(function NodesLayer() {
 
   const handleEdit = useCallback(
     (id: string) => {
+      if (readOnly) return;
       const node = useBoardStore.getState().document?.nodes[id];
       if (node?.type === 'shape' && node.design) {
         select([id]);
         useInspector.setState({ collapsed: false });
       } else startEditing(id);
     },
-    [select, startEditing],
+    [readOnly, select, startEditing],
   );
 
-  const toggleSection = useCallback((id: string) => {
-    const node = useBoardStore.getState().document?.nodes[id];
-    if (isSection(node)) patchSection(id, { collapsed: !node.design.collapsed });
-  }, []);
+  const toggleSection = useCallback(
+    (id: string) => {
+      if (readOnly) return;
+      const node = useBoardStore.getState().document?.nodes[id];
+      if (isSection(node)) patchSection(id, { collapsed: !node.design.collapsed });
+    },
+    [readOnly],
+  );
 
   if (!document) return null;
 
@@ -140,6 +144,7 @@ export const NodesLayer = memo(function NodesLayer() {
               title={nodeTitle(document, id)}
               card={resolveCard(document, id)?.design ?? null}
               selected={selected.has(id)}
+              readOnly={readOnly}
               editing={false}
               onSelect={handleSelect}
               onStartEditing={handleEdit}

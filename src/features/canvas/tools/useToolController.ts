@@ -37,9 +37,7 @@ export function useToolController(enabled = true) {
   // это не будущий узел, а временная геометрия.
   const [marquee, setMarquee] = useState<Rect | null>(null);
 
-
   const creating = CREATING.has(activeTool);
-
 
   const pointerWorld = useCallback(
     (stage: Konva.Stage | null): WorldPoint | null => {
@@ -96,7 +94,7 @@ export function useToolController(enabled = true) {
       if (!point) return;
       start.current = point;
     },
-    [activeTool, clearSelection, creating, pointerWorld],
+    [enabled, activeTool, clearSelection, creating, pointerWorld],
   );
 
   const onMouseMove = useCallback(
@@ -119,7 +117,7 @@ export function useToolController(enabled = true) {
         selectInBox(box);
       }
     },
-    [activeTool, build, creating, pointerWorld, selectInBox],
+    [enabled, activeTool, build, creating, pointerWorld, selectInBox],
   );
 
   const onMouseUp = useCallback(
@@ -153,7 +151,7 @@ export function useToolController(enabled = true) {
         startEditing(node.id);
       }
     },
-    [addNode, build, creating, pointerWorld, select, setTool, startEditing],
+    [enabled, addNode, build, creating, pointerWorld, select, setTool, startEditing],
   );
 
   return { onMouseDown, onMouseMove, onMouseUp, preview, marquee, creating };

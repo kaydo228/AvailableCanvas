@@ -25,6 +25,7 @@ export const DesignNodeView = memo(function DesignNodeView({
   title,
   card,
   selected,
+  readOnly,
   onSelect,
   onStartEditing,
   onDragEnd,
@@ -49,11 +50,11 @@ export const DesignNodeView = memo(function DesignNodeView({
       y={node.y}
       rotation={node.rotation}
       opacity={node.opacity}
-      draggable={!node.locked}
+      draggable={!readOnly && !node.locked}
       onClick={click}
       onDblClick={(event) => {
         event.cancelBubble = true;
-        onStartEditing(node.id);
+        if (!readOnly) onStartEditing(node.id);
       }}
       onDragEnd={(event) => onDragEnd(node.id, event.target.x(), event.target.y())}
     >
@@ -95,7 +96,7 @@ export const DesignNodeView = memo(function DesignNodeView({
             }}
             onClick={(event) => {
               event.cancelBubble = true;
-              onToggleSection(node.id);
+              if (!readOnly) onToggleSection(node.id);
             }}
           >
             <Rect width={28} height={28} fill="#ffffff" opacity={0.14} cornerRadius={6} />

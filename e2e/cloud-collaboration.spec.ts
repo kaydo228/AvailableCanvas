@@ -600,37 +600,68 @@ test('invite-route задаёт пароль, принимает приглаш�
   expect(await page.evaluate(() => window.__collaboration.invites)).toHaveLength(0);
 });
 
-test('viewer не меняет доску, но может двигать вид и экспортировать', async ({ page }) => {
-  await install(page, {
-    actor: actor('viewer-1', 'viewer@example.com'),
-    projects: [projectRow('owner-1', { original: shape('original') })],
-    members: [
-      {
-        project_id: 'shared-1',
-        user_id: 'viewer-1',
-        email: 'viewer@example.com',
-        role: 'viewer',
-      },
-    ],
-  });
-  await openProject(page);
-  await expect(page.getByText('Только просмотр')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Выбор (V)' })).toHaveCount(0);
-  await expect(page.getByText('Свойства', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Доступ' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Экспорт' })).toBeVisible();
+for (const kind of ['shape', 'card'] as const) {
+  test(`viewer не меняет ${kind}, но может читать, двигать вид и экспортировать`, async ({
+    page,
+  }) => {
+    const original = {
+      ...shape('original'),
+      ...(kind === 'card'
+        ? {
+            width: 280,
+            height: 160,
+            design: {
+              kind: 'card',
+              cardType: 'mechanic',
+              title: 'Рывок',
+              summary: '',
+              status: 'idea',
+              implementation: 'not-started',
+              tags: [],
+              fields: {},
+              references: [],
+              comments: [],
+              table: { columns: [], rows: [] },
+            },
+          }
+        : {}),
+    };
+    await install(page, {
+      actor: actor('viewer-1', 'viewer@example.com'),
+      projects: [projectRow('owner-1', { original })],
+      members: [
+        {
+          project_id: 'shared-1',
+          user_id: 'viewer-1',
+          email: 'viewer@example.com',
+          role: 'viewer',
+        },
+      ],
+    });
+    await openProject(page);
+    await expect(page.getByText('Только просмотр')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Выбор (V)' })).toHaveCount(0);
+    await expect(page.getByText('Свойства', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Доступ' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Экспорт' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Добавить карточку' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Версии', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Читать диздок' }).click();
+    await expect(page.getByRole('button', { name: 'Скачать Markdown' })).toBeVisible();
+    await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
 
-  const before = await boardSnapshot(page);
-  await tryViewerMutations(page);
-  expect(await boardSnapshot(page)).toEqual(before);
+    const before = await boardSnapshot(page);
+    await tryViewerMutations(page);
+    expect(await boardSnapshot(page)).toEqual(before);
 
-  const viewport = await page.evaluate(() => {
-    window.__board.getState().panBy(45, -30);
-    window.__board.getState().zoomAt({ x: 100, y: 100 }, 0.4);
-    return window.__board.getState().document?.viewport;
+    const viewport = await page.evaluate(() => {
+      window.__board.getState().panBy(45, -30);
+      window.__board.getState().zoomAt({ x: 100, y: 100 }, 0.4);
+      return window.__board.getState().document?.viewport;
+    });
+    expect(viewport).not.toEqual({ x: 0, y: 0, zoom: 1 });
   });
-  expect(viewport).not.toEqual({ x: 0, y: 0, zoom: 1 });
-});
+}
 
 test('шапка показывает участников, у которых открыт проект', async ({ page }) => {
   await install(page, {

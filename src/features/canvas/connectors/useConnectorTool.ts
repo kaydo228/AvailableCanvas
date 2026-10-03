@@ -47,9 +47,7 @@ export function useConnectorTool(enabled = true) {
   const [draft, setDraft] = useState<ConnectorDraft | null>(null);
   const [hint, setHint] = useState<AnchorHint | null>(null);
 
-
-  const active = activeTool === 'connector' || activeTool === 'pen';
-
+  const active = enabled && (activeTool === 'connector' || activeTool === 'pen');
 
   const pointerWorld = useCallback((stage: Konva.Stage | null): WorldPoint | null => {
     const pointer = stage?.getPointerPosition();

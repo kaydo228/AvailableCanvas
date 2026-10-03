@@ -13,7 +13,16 @@ import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
 
-import { ShareButton, useCloudSync } from '@/features/cloud';
+import {
+  AccessBadge,
+  OnlineParticipants,
+  ShareButton,
+  useCloudSync,
+  useProjectPresence,
+  useProjectRealtime,
+} from '@/features/cloud';
+import { canEdit, type ProjectAccess } from '@/features/cloud/model/access';
+import { connectRemoteImages } from '@/features/cloud/model/images';
 import { focusNode } from '@/features/design/actions';
 import { DesignSidebar } from '@/features/design/ui/DesignSidebar';
 import { DesignTools } from '@/features/design/ui/DesignTools';
@@ -244,8 +253,8 @@ export function CanvasScreen() {
         {editable && <SaveIndicator />}
 
         <div className="ml-auto flex items-center gap-1.5">
-
-          <DesignTools name={state.name} />
+          <OnlineParticipants participants={onlineParticipants} />
+          <DesignTools name={state.name} readOnly={!editable} />
 
           <ThemeToggle />
           {projectId && !state.revoked && (
@@ -256,7 +265,7 @@ export function CanvasScreen() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <DesignSidebar />
+        {editable && <DesignSidebar />}
         <div className="relative flex-1 overflow-hidden">
           {editable && <Toolbar />}
           <CanvasStage

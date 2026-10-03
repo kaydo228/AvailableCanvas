@@ -392,7 +392,9 @@ const Versions = () => {
   );
 };
 
-export const DesignTools = memo(({ name }: { name: string }) => {
+type DesignToolsProps = { name: string; readOnly?: boolean };
+
+export const DesignTools = memo(({ name, readOnly = false }: DesignToolsProps) => {
   const document = useDesignDocument();
   const [open, setOpen] = useState<'read' | 'versions' | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
@@ -421,19 +423,21 @@ export const DesignTools = memo(({ name }: { name: string }) => {
         <BookOpen size={14} aria-hidden="true" />
         Читать диздок
       </button>
-      <button
-        type="button"
-        className="design-button"
-        onClick={(e) => {
-          opener.current = e.currentTarget;
-          setOpen('versions');
-        }}
-      >
-        <History size={14} aria-hidden="true" />
-        Версии
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          className="design-button"
+          onClick={(e) => {
+            opener.current = e.currentTarget;
+            setOpen('versions');
+          }}
+        >
+          <History size={14} aria-hidden="true" />
+          Версии
+        </button>
+      )}
       <Dialog.Root
-        open={open !== null}
+        open={open !== null && (open !== 'versions' || !readOnly)}
         onOpenChange={(next) => {
           if (!next) setOpen(null);
         }}
