@@ -1,3 +1,5 @@
+import { normalizeDesign } from '@/features/design/normalize';
+import { nodeSchema } from '@/features/export/lib/fileFormat';
 /**
  * Починка документа на входе (П1 из docs/nightly/shell/01-план-починки.md).
  *
@@ -22,7 +24,7 @@
  * (docs/CONTRACT-REQUESTS.md, 2026-08-27 A → B).
  */
 
-import { groupBounds } from '@/shared/model/operations';
+import { groupBounds, topmostGroup } from '@/shared/model/operations';
 import type {
   BoardDocument,
   BoxNode,
@@ -54,6 +56,13 @@ const clamp = (value: number, min: number, max: number): number =>
 /** Конечное число или запасное: NaN и Infinity в модели дороже неточного значения. */
 const finite = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+/** Property order in imported JSON is not a content change. Arrays retain their order. */
+const contentJSON = (value: unknown): string | undefined =>
+  JSON.stringify(value, (_key, item: unknown) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    return Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)));
+  });
 
 const isBox = (node: Node): node is BoxNode => node.type !== 'connector';
 
@@ -310,6 +319,23 @@ function repairGroups(nodes: Record<Id, Node>, repairs: Repair[]): void {
           nodes[child.id] = { ...child, groupId: group.groupId };
         }
       }
+      for (const [id, section] of Object.entries(nodes)) {
+        if (
+          section.type === 'shape' &&
+          section.design?.kind === 'section' &&
+          section.design.children.includes(group.id)
+        ) {
+          nodes[id] = {
+            ...section,
+            design: {
+              ...section.design,
+              children: section.design.children.flatMap((member) =>
+                member === group.id ? (child ? [child.id] : []) : [member],
+              ),
+            },
+          };
+        }
+      }
       delete nodes[group.id];
       repairs.push({ rule: 2, what: `группа ${group.id}: меньше двух участников — распущена` });
       changed = true;
@@ -360,6 +386,14 @@ export function repairDocument(document: BoardDocument): RepairResult {
 
     fixed = repairNumbers(fixed, repairs);
     fixed = repairTextFields(fixed, repairs);
+    if (fixed.type === 'shape' && fixed.design !== undefined) {
+      const design = normalizeDesign(fixed.design);
+      if (contentJSON(design) !== contentJSON(fixed.design))
+        repairs.push({ rule: 5, what: `узел ${key}: поля диздока восстановлены` });
+      fixed = { ...fixed };
+      if (design) fixed.design = design;
+      else delete fixed.design;
+    }
 
     // Инвариант 2: коннектор не участвует в группе.
     if (fixed.type === 'connector' && 'groupId' in fixed) {
@@ -414,6 +448,31 @@ export function repairDocument(document: BoardDocument): RepairResult {
 
   repairGroups(nodes, repairs);
 
+  const assigned = new Set<string>();
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.type !== 'shape' || node.design?.kind !== 'section') continue;
+    const previous = node.design.children;
+    const children = previous.flatMap((child) => {
+      const root = topmostGroup({ ...document, nodes }, child);
+      const member = nodes[root];
+      if (
+        !member ||
+        assigned.has(root) ||
+        (member.type === 'shape' && member.design?.kind === 'section')
+      )
+        return [];
+      assigned.add(root);
+      return [root];
+    });
+    if (
+      children.length !== node.design.children.length ||
+      children.some((child, i) => child !== previous[i])
+    ) {
+      nodes[id] = { ...node, design: { ...node.design, children } };
+      repairs.push({ rule: 1, what: `раздел ${id}: состав восстановлен` });
+    }
+  }
+
   const order = repairOrder(nodes, document.order, repairs);
 
   const zoom = clamp(finite(document.viewport.zoom, 1), ZOOM_MIN, ZOOM_MAX);
@@ -432,6 +491,51 @@ export function repairDocument(document: BoardDocument): RepairResult {
       // Обратно в обычный объект: Object.create(null) ломает структурное
       // клонирование в IndexedDB и сравнение в тестах.
       nodes: { ...nodes },
+      ...(document.versions !== undefined
+        ? {
+            versions: (Array.isArray(document.versions) ? document.versions : [])
+              .slice(0, 10)
+              .flatMap((version) => {
+                if (
+                  !version ||
+                  typeof version.id !== 'string' ||
+                  typeof version.name !== 'string' ||
+                  !version.snapshot ||
+                  !version.snapshot.nodes ||
+                  !Array.isArray(version.snapshot.order) ||
+                  !version.snapshot.order.every((id) => typeof id === 'string') ||
+                  !version.snapshot.background ||
+                  !Object.values(version.snapshot.nodes).every(
+                    (node) => nodeSchema.safeParse(node).success,
+                  )
+                ) {
+                  repairs.push({ rule: 5, what: 'Повреждённая версия пропущена' });
+                  return [];
+                }
+                const fixed = repairDocument({
+                  projectId: document.projectId,
+                  schemaVersion: 1,
+                  viewport: { x: 0, y: 0, zoom: 1 },
+                  nodes: version.snapshot.nodes,
+                  order: version.snapshot.order,
+                  background: version.snapshot.background,
+                });
+                repairs.push(...fixed.repairs);
+                return [
+                  {
+                    id: version.id,
+                    name: version.name.slice(0, 240),
+                    createdAt: clamp(finite(version.createdAt, 0), -8.64e15, 8.64e15),
+                    snapshot: {
+                      nodes: fixed.document.nodes,
+                      order: fixed.document.order,
+                      background: fixed.document.background,
+                    },
+                  },
+                ];
+              }),
+          }
+        : {}),
       order,
       viewport: { x: viewportX, y: viewportY, zoom },
     },

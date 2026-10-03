@@ -6,23 +6,42 @@
  * а не подписи. Сам холст об этой панели ничего не знает.
  */
 
+import {
+  ArrowUpRight,
+  Circle,
+  createLucideIcon,
+  Diamond,
+  Hand,
+  Hexagon,
+  ImagePlus,
+  type LucideIcon,
+  Minus,
+  MousePointer2,
+  Square,
+  StickyNote,
+  Type,
+} from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useImageInsert } from '@/features/canvas/tools/useImageInsert';
 import type { Tool } from '@/shared/store/board';
 import { useBoardStore } from '@/shared/store/board';
 
-const TOOLS: Array<{ id: Tool; label: string; hotkey: string }> = [
-  { id: 'select', label: 'Выбор', hotkey: 'V' },
-  { id: 'hand', label: 'Рука', hotkey: 'H' },
-  { id: 'sticky', label: 'Стикер', hotkey: 'S' },
-  { id: 'text', label: 'Текст', hotkey: 'T' },
-  { id: 'rect', label: 'Прямоугольник', hotkey: 'R' },
-  { id: 'ellipse', label: 'Эллипс', hotkey: 'O' },
-  { id: 'diamond', label: 'Ромб', hotkey: 'D' },
-  { id: 'hexagon', label: 'Шестиугольник', hotkey: 'X' },
-  { id: 'heptagon', label: 'Семиугольник', hotkey: '7' },
-  { id: 'connector', label: 'Линия', hotkey: 'L' },
-  { id: 'pen', label: 'Стрелка', hotkey: 'P' },
+const Heptagon = createLucideIcon('Heptagon', [
+  ['polygon', { points: '12,2 20,6 22,14 16,22 8,22 2,14 4,6', key: 'outline' }],
+]);
+
+const TOOLS: Array<{ id: Tool; label: string; hotkey: string; icon: LucideIcon }> = [
+  { id: 'select', label: 'Выбор', hotkey: 'V', icon: MousePointer2 },
+  { id: 'hand', label: 'Рука', hotkey: 'H', icon: Hand },
+  { id: 'sticky', label: 'Стикер', hotkey: 'S', icon: StickyNote },
+  { id: 'text', label: 'Текст', hotkey: 'T', icon: Type },
+  { id: 'rect', label: 'Прямоугольник', hotkey: 'R', icon: Square },
+  { id: 'ellipse', label: 'Эллипс', hotkey: 'O', icon: Circle },
+  { id: 'diamond', label: 'Ромб', hotkey: 'D', icon: Diamond },
+  { id: 'hexagon', label: 'Шестиугольник', hotkey: 'X', icon: Hexagon },
+  { id: 'heptagon', label: 'Семиугольник', hotkey: '7', icon: Heptagon },
+  { id: 'connector', label: 'Линия', hotkey: 'L', icon: Minus },
+  { id: 'pen', label: 'Стрелка', hotkey: 'P', icon: ArrowUpRight },
 ];
 
 const BTN =
@@ -47,13 +66,14 @@ export function Toolbar() {
     zoomAt({ x: canvasSize.width / 2, y: canvasSize.height / 2 }, next / zoom);
 
   return (
-    <div className="absolute top-4 left-4 z-10 flex items-center gap-0.5 rounded-lg border border-rule bg-sheet p-1 shadow-pop">
+    <div className="absolute top-4 left-4 z-10 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-0.5 rounded-lg border border-rule bg-sheet p-1 shadow-pop">
       {TOOLS.map((tool) => (
         <button
           key={tool.id}
           type="button"
           onClick={() => setTool(tool.id)}
           title={`${tool.label} (${tool.hotkey})`}
+          aria-label={tool.label}
           aria-pressed={activeTool === tool.id}
           className={`${BTN} ${
             activeTool === tool.id
@@ -61,7 +81,7 @@ export function Toolbar() {
               : 'text-pencil hover:bg-well hover:text-ink'
           }`}
         >
-          {tool.label}
+          <tool.icon className="size-4" aria-hidden="true" />
         </button>
       ))}
 
@@ -70,9 +90,10 @@ export function Toolbar() {
         type="button"
         onClick={pickFile}
         title="Картинка (I) — или перетащите файл на холст, или Cmd+V"
+        aria-label="Картинка"
         className={QUIET}
       >
-        Картинка
+        <ImagePlus className="size-4" aria-hidden="true" />
       </button>
 
       <span className="mx-1.5 h-5 w-px bg-rule" aria-hidden="true" />

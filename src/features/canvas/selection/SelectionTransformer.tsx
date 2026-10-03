@@ -13,6 +13,7 @@
 import type Konva from 'konva';
 import { useCallback, useEffect, useRef } from 'react';
 import { Transformer } from 'react-konva';
+import { isSection } from '@/features/design/model';
 
 import { groupHasRotatedDescendant } from '@/shared/model/operations';
 import { useBoardStore } from '@/shared/store/board';
@@ -62,6 +63,7 @@ export function SelectionTransformer() {
       );
 
     transformer.keepRatio(keep);
+    transformer.rotateEnabled(!selected.some((node) => node.type === 'shape' && node.design));
     transformer.enabledAnchors(
       keep
         ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
@@ -93,7 +95,12 @@ export function SelectionTransformer() {
     }
 
     const shapes = selection
-      .map((id) => (nodes?.[id]?.type === 'draw' ? null : stage.findOne(`#${id}`)))
+      .map((id) => {
+        const node = nodes?.[id];
+        return node?.type === 'draw' || (isSection(node) && node.design.collapsed)
+          ? null
+          : stage.findOne(`#${id}`);
+      })
       .filter((shape): shape is Konva.Node => Boolean(shape));
 
     transformer.nodes(shapes);

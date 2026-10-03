@@ -24,6 +24,21 @@ describe('rectsIntersect', () => {
 });
 
 describe('nodesInBox', () => {
+  it('содержимое свёрнутого раздела не выделяется рамкой', () => {
+    const section = shape('section', -20, -60);
+    section.design = {
+      kind: 'section',
+      title: 'Бой',
+      description: '',
+      children: ['a'],
+      collapsed: true,
+      readingOrder: 0,
+    };
+    section.width = 400;
+    section.height = 300;
+    const d = doc([section, shape('a')]);
+    expect(nodesInBox(d, { x: 0, y: 0, width: 100, height: 60 })).not.toContain('a');
+  });
   it('рамка задела узел частично — узел выделяется', () => {
     // Полное накрытие требовать нельзя: большую картинку пришлось бы
     // обводить целиком, а это неудобно.

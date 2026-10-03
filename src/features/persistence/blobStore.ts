@@ -1,3 +1,4 @@
+import { imageBlobIds } from '@/shared/model/operations';
 /**
  * Хранилище картинок в IndexedDB (FR-06).
  *
@@ -178,9 +179,7 @@ export const collectOrphanBlobs = async (): Promise<Id[]> =>
   withDB(async (db) => {
     const alive = new Set<Id>();
     for (const document of await db.getAll('documents')) {
-      for (const node of Object.values(document.nodes)) {
-        if (node.type === 'image') alive.add(node.blobId);
-      }
+      for (const blobId of imageBlobIds(document)) alive.add(blobId);
     }
     return (await db.getAllKeys('blobs')).filter((blobId) => !alive.has(blobId));
   });

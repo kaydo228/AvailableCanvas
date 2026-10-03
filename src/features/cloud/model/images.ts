@@ -18,6 +18,7 @@
  */
 
 import { getBlob, putBlobDirect, setRemoteBlobSource } from '@/features/persistence/blobStore';
+import { imageBlobIds } from '@/shared/model/operations';
 import type { BoardDocument, Id } from '@/shared/types/document';
 
 import { getCloud } from './client';
@@ -25,19 +26,7 @@ import { getCloud } from './client';
 const BUCKET = 'images';
 
 /** Какие файлы упоминает документ. Порядок — как в `order`, дубли убраны. */
-export const collectBlobIds = (document: BoardDocument): Id[] => {
-  const found: Id[] = [];
-  const seen = new Set<Id>();
-
-  for (const id of document.order) {
-    const node = document.nodes[id];
-    if (node?.type !== 'image' || seen.has(node.blobId)) continue;
-    seen.add(node.blobId);
-    found.push(node.blobId);
-  }
-
-  return found;
-};
+export const collectBlobIds = imageBlobIds;
 
 /**
  * Возвращает `true`, только если все нужные файлы гарантированно лежат на

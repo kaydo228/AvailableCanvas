@@ -6,14 +6,14 @@
  */
 
 import type Konva from 'konva';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Circle, Group, Line } from 'react-konva';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { WorldPoint } from '@/features/canvas/engine/contract';
 import type { NodeViewProps } from '@/features/canvas/nodes/contract';
-import { useBoardStore } from '@/shared/store/board';
-import type { ConnectorNode } from '@/shared/types/document';
+import { type BoardState, useBoardStore } from '@/shared/store/board';
+import type { BoardDocument, ConnectorNode } from '@/shared/types/document';
 
 import { ConnectorLabel } from './ConnectorLabel';
 import { endTangent, startTangent } from './labelPosition';
@@ -72,11 +72,21 @@ function ConnectorViewInner({
    *
    * Хук стоит ДО любых ранних возвратов: правило useHookAtTopLevel активно.
    */
-  const points = useBoardStore(
-    useShallow((state): number[] | null =>
-      state.document ? connectorPoints(node, state.document) : null,
-    ),
-  );
+  const selectPoints = useMemo(() => {
+    let previousNodes: BoardDocument['nodes'] | undefined;
+    let route: number[] | null = null;
+    return (state: BoardState) => {
+      const document = state.document;
+      // Immer preserves nodes on camera/selection updates. Routing only
+      // depends on geometry, so those updates can reuse the entire route.
+      if (document?.nodes !== previousNodes) {
+        previousNodes = document?.nodes;
+        route = document ? connectorPoints(node, document) : null;
+      }
+      return route;
+    };
+  }, [node]);
+  const points = useBoardStore(useShallow(selectPoints));
 
   // Конец ссылается на исчезнувший узел — рисовать нечего. Инвариант 4
   // обязан такого не допускать, но падать из-за его нарушения нельзя.

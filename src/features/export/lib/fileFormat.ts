@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod';
+import { CARD_TYPES, DESIGN_STATUSES, RELATION_TYPES } from '@/shared/types/design';
 
 export const FILE_FORMAT = 'prostor-board';
 
@@ -53,6 +54,53 @@ const endpoint = z.object({
   point: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
+const shortText = z.string().max(240);
+const longText = z.string().max(10_000);
+export const designSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('card'),
+    cardType: z.enum(
+      Object.keys(CARD_TYPES) as [keyof typeof CARD_TYPES, ...(keyof typeof CARD_TYPES)[]],
+    ),
+    title: shortText,
+    summary: longText,
+    status: z.enum(
+      Object.keys(DESIGN_STATUSES) as [
+        keyof typeof DESIGN_STATUSES,
+        ...(keyof typeof DESIGN_STATUSES)[],
+      ],
+    ),
+    implementation: z.enum(['not-started', 'in-progress', 'done']),
+    tags: z.array(shortText).max(20),
+    fields: z.record(shortText, longText),
+    references: z.array(z.string()).max(1000),
+    comments: z
+      .array(
+        z.object({
+          id: z.string(),
+          author: shortText,
+          text: longText,
+          createdAt: z.number().min(-8.64e15).max(8.64e15),
+          resolved: z.boolean(),
+        }),
+      )
+      .max(200),
+    table: z.object({
+      columns: z.array(shortText).max(20),
+      rows: z.array(z.array(longText).max(20)).max(200),
+    }),
+  }),
+  z.object({
+    kind: z.literal('section'),
+    title: shortText,
+    description: longText,
+    children: z.array(z.string()),
+    collapsed: z.boolean(),
+    readingOrder: z.number(),
+  }),
+  z.object({ kind: z.literal('reference'), targetId: z.string() }),
+]);
+
 /**
  * Схема одного узла. Экспортируется ради буфера обмена: текст из системного
  * буфера — такая же граница доверия, как файл, и проверять его надо той же
@@ -68,6 +116,7 @@ export const nodeSchema = z.discriminatedUnion('type', [
     strokeWidth: z.number(),
     dash: z.array(z.number()).optional(),
     cornerRadius: z.number().optional(),
+    design: designSchema.optional(),
     label: textStyle.optional(),
   }),
   z.object({ ...box, type: z.literal('text'), text: textStyle, autoWidth: z.boolean() }),
@@ -93,6 +142,14 @@ export const nodeSchema = z.discriminatedUnion('type', [
     from: endpoint,
     to: endpoint,
     routing: z.enum(['straight', 'elbow', 'curve']),
+    relation: z
+      .enum(
+        Object.keys(RELATION_TYPES) as [
+          keyof typeof RELATION_TYPES,
+          ...(keyof typeof RELATION_TYPES)[],
+        ],
+      )
+      .optional(),
     stroke: z.string(),
     strokeWidth: z.number(),
     dash: z.array(z.number()).optional(),
@@ -117,7 +174,23 @@ export const nodeSchema = z.discriminatedUnion('type', [
  * файл человек и получил из нашего же экспорта — отказывать ему в открытии
  * собственной доски вместо починки неправильно.
  */
+const snapshotSchema = z.object({
+  nodes: z.record(z.string(), nodeSchema),
+  order: z.array(z.string()),
+  background: z.object({ color: z.string(), grid: z.enum(['dots', 'lines', 'none']) }),
+});
 const documentSchema = z.object({
+  versions: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: shortText,
+        createdAt: z.number().min(-8.64e15).max(8.64e15),
+        snapshot: snapshotSchema,
+      }),
+    )
+    .max(10)
+    .optional(),
   projectId: z.string(),
   schemaVersion: z.literal(DOCUMENT_VERSION),
   nodes: z.record(z.string(), nodeSchema),
@@ -143,12 +216,15 @@ export const boardFileSchema = z
   // с дырой на месте картинки, и понять почему будет уже невозможно:
   // blobId ссылается в IndexedDB чужой машины.
   .superRefine((file, ctx) => {
-    for (const [id, node] of Object.entries(file.document.nodes)) {
+    for (const node of [
+      file.document,
+      ...(file.document.versions ?? []).map((version) => version.snapshot),
+    ].flatMap((snapshot) => Object.values(snapshot.nodes))) {
       if (node.type === 'image' && file.images[node.blobId] === undefined) {
         ctx.addIssue({
           code: 'custom',
           path: ['images', node.blobId],
-          message: `картинки для узла ${id} нет в файле`,
+          message: `картинки для узла ${node.id} нет в файле`,
         });
       }
     }

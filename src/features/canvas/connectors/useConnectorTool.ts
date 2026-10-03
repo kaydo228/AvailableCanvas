@@ -13,20 +13,21 @@ import { toWorld } from '@/features/canvas/engine/viewport';
 import { useBoardStore } from '@/shared/store/board';
 import type { BoxNode, Endpoint } from '@/shared/types/document';
 
-import { isTooShort } from './connectorTool';
+import { createConnector, isTooShort } from './connectorTool';
 import {
   endpointAt,
   nearestAnchor,
   nodeAtPoint,
   pointEndpoint,
   referencePoint,
-  resolveEndpoint,
   type SideAnchor,
 } from './geometry';
+import { connectorPoints } from './routing';
 
 export interface ConnectorDraft {
   from: WorldPoint;
   to: WorldPoint;
+  points: number[];
 }
 
 export interface AnchorHint {
@@ -46,7 +47,7 @@ export function useConnectorTool() {
   const [draft, setDraft] = useState<ConnectorDraft | null>(null);
   const [hint, setHint] = useState<AnchorHint | null>(null);
 
-  const active = activeTool === 'connector';
+  const active = activeTool === 'connector' || activeTool === 'pen';
 
   const pointerWorld = useCallback((stage: Konva.Stage | null): WorldPoint | null => {
     const pointer = stage?.getPointerPosition();
@@ -61,7 +62,9 @@ export function useConnectorTool() {
     const document = state.document;
     if (!document) return setHint(null);
 
-    const node = nodeAtPoint(document, point);
+    const node =
+      nodeAtPoint(document, point) ??
+      nodeAtPoint(document, point, 18 / Math.max(document.viewport.zoom, 1e-6));
     if (!node) return setHint(null);
 
     const zoom = document.viewport.zoom;
@@ -80,7 +83,7 @@ export function useConnectorTool() {
 
       start.current = endpointAt(document, point, document.viewport.zoom);
       startPoint.current = point;
-      setDraft({ from: point, to: point });
+      setDraft({ from: point, to: point, points: [point.x, point.y, point.x, point.y] });
     },
     [active, pointerWorld],
   );
@@ -94,7 +97,7 @@ export function useConnectorTool() {
       updateHint(point);
 
       const from = startPoint.current;
-      if (from) setDraft({ from, to: point });
+      if (from) setDraft({ from, to: point, points: [from.x, from.y, point.x, point.y] });
     },
     [active, pointerWorld, updateHint],
   );
@@ -153,9 +156,9 @@ export function useConnectorTool() {
     const endpoint = start.current;
     if (!document || !endpoint) return draft;
 
-    const toward = draft.to;
-    const from = resolveEndpoint(endpoint, document, toward) ?? draft.from;
-    return { from, to: draft.to };
+    const to = endpointAt(document, draft.to, document.viewport.zoom);
+    const points = connectorPoints(createConnector(endpoint, to), document) ?? draft.points;
+    return { ...draft, points };
   }, [draft]);
 
   return {

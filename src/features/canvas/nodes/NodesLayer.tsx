@@ -6,14 +6,19 @@
  * цепочкой if по типам.
  */
 
-import { type ComponentType, useCallback } from 'react';
+import { type ComponentType, memo, useCallback } from 'react';
 import { Group } from 'react-konva';
+import { useShallow } from 'zustand/react/shallow';
 import { ConnectorView } from '@/features/canvas/connectors/ConnectorView';
 import { selectionForClick } from '@/features/canvas/selection/groupSelection';
 import { useGroupDrag } from '@/features/canvas/selection/useGroupDrag';
+import { patchSection } from '@/features/design/actions';
+import { hiddenDesignIds, isSection, nodeTitle, resolveCard } from '@/features/design/model';
+import { useInspector } from '@/features/inspector/model/store';
 import { useBoardStore } from '@/shared/store/board';
 import type { Node } from '@/shared/types/document';
 import type { NodeViewProps } from './contract';
+import { DesignNodeView } from './DesignNodeView';
 import { DrawView } from './DrawView';
 import { GroupView } from './GroupView';
 import { ImageView } from './ImageView';
@@ -37,8 +42,9 @@ const RENDERERS = {
   group: GroupView,
 } as unknown as Partial<Record<Node['type'], ComponentType<NodeViewProps>>>;
 
-export function NodesLayer() {
-  const document = useBoardStore((s) => s.document);
+export const NodesLayer = memo(function NodesLayer() {
+  useBoardStore(useShallow((s) => [s.document?.nodes, s.document?.order]));
+  const document = useBoardStore.getState().document;
   const selection = useBoardStore((s) => s.selection);
   const editingNodeId = useBoardStore((s) => s.editingNodeId);
   const select = useBoardStore((s) => s.select);
@@ -73,9 +79,31 @@ export function NodesLayer() {
     [updateNode],
   );
 
+  const handleEdit = useCallback(
+    (id: string) => {
+      const node = useBoardStore.getState().document?.nodes[id];
+      if (node?.type === 'shape' && node.design) {
+        select([id]);
+        useInspector.setState({ collapsed: false });
+      } else startEditing(id);
+    },
+    [select, startEditing],
+  );
+
+  const toggleSection = useCallback((id: string) => {
+    const node = useBoardStore.getState().document?.nodes[id];
+    if (isSection(node)) patchSection(id, { collapsed: !node.design.collapsed });
+  }, []);
+
   if (!document) return null;
 
   const selected = new Set(selection);
+  const hidden = hiddenDesignIds(document);
+  // Section frames always sit behind their freely editable contents.
+  const ordered = [
+    ...document.order.filter((id) => isSection(document.nodes[id])),
+    ...document.order.filter((id) => !isSection(document.nodes[id])),
+  ];
 
   return (
     // Обёртка нужна, чтобы поймать всплывающие события перетаскивания
@@ -92,9 +120,26 @@ export function NodesLayer() {
       onDragMove={groupDrag.onDragMove}
       onDragEnd={groupDrag.onDragEnd}
     >
-      {document.order.map((id) => {
+      {ordered.map((id) => {
         const node = document.nodes[id];
-        if (!node) return null;
+        if (!node || hidden.has(id)) return null;
+
+        if (node.type === 'shape' && node.design) {
+          return (
+            <DesignNodeView
+              key={id}
+              node={node}
+              title={nodeTitle(document, id)}
+              card={resolveCard(document, id)?.design ?? null}
+              selected={selected.has(id)}
+              editing={false}
+              onSelect={handleSelect}
+              onStartEditing={handleEdit}
+              onDragEnd={handleDragEnd}
+              onToggleSection={toggleSection}
+            />
+          );
+        }
 
         const Renderer = RENDERERS[node.type];
         if (!Renderer) return null;
@@ -106,11 +151,11 @@ export function NodesLayer() {
             selected={selected.has(id)}
             editing={editingNodeId === id}
             onSelect={handleSelect}
-            onStartEditing={startEditing}
+            onStartEditing={handleEdit}
             onDragEnd={handleDragEnd}
           />
         );
       })}
     </Group>
   );
-}
+});

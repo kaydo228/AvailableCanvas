@@ -7,11 +7,15 @@
  */
 
 import type { Rect } from '@/features/canvas/engine/contract';
+import { hiddenDesignIds, isSection } from '@/features/design/model';
 import type { BoardDocument, Id, Node } from '@/shared/types/document';
 
 /** Габариты узла в мировых координатах. У коннектора рамки нет. */
 export function boundsOfNode(node: Node): Rect | null {
   if (node.type === 'connector') return null;
+  if (isSection(node) && node.design.collapsed) {
+    return { x: node.x, y: node.y, width: Math.min(node.width, 320), height: 64 };
+  }
   return { x: node.x, y: node.y, width: node.width, height: node.height };
 }
 
@@ -32,10 +36,11 @@ export function nodesInBox(document: BoardDocument, box: Rect): Id[] {
   if (box.width <= 0 || box.height <= 0) return [];
 
   const hits: Id[] = [];
+  const hidden = hiddenDesignIds(document);
 
   for (const id of document.order) {
     const node = document.nodes[id];
-    if (!node) continue;
+    if (!node || hidden.has(id)) continue;
     if (node.type !== 'connector' && node.locked) continue;
 
     const bounds = boundsOfNode(node);

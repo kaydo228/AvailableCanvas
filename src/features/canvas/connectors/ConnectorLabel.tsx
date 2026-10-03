@@ -3,6 +3,7 @@
  * концами: у ломаной середина отрезка легко оказывается вне линии.
  */
 
+import Konva from 'konva';
 import { Group, Rect, Text } from 'react-konva';
 
 import type { ConnectorNode } from '@/shared/types/document';
@@ -11,8 +12,6 @@ import { routeMidpoint } from './labelPosition';
 
 const PADDING_X = 6;
 const PADDING_Y = 2;
-/** Цвет подложки — фон доски по умолчанию: линия не должна перечёркивать буквы. */
-const BACKDROP = '#fbfbfd';
 
 export function ConnectorLabel({
   node,
@@ -32,10 +31,14 @@ export function ConnectorLabel({
   // Ширину меряем грубо: точное измерение здесь стоит дороже, чем даёт.
   const width = label.value.length * fontSize * 0.6 + PADDING_X * 2;
   const height = fontSize * 1.3 + PADDING_Y * 2;
+  // Labels created in the dark theme have light ink. Keep their backdrop
+  // contrasting even when the board theme subsequently changes.
+  const { r, g, b } = Konva.Util.getRGB(label.color);
+  const backdrop = 0.299 * r + 0.587 * g + 0.114 * b > 160 ? '#202722' : '#fbfbfd';
 
   return (
     <Group x={at.x - width / 2} y={at.y - height / 2} listening={false}>
-      <Rect width={width} height={height} fill={BACKDROP} cornerRadius={3} />
+      <Rect width={width} height={height} fill={backdrop} cornerRadius={3} />
       <Text
         x={PADDING_X}
         y={PADDING_Y}

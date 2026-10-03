@@ -125,6 +125,23 @@ describe('nodeAtPoint', () => {
 describe('endpointAt — куда привяжется конец', () => {
   const d = doc([box('a', 0, 0)]); // 100 x 60
 
+  it('цепляется рядом с внешней границей с одинаковым экранным допуском', () => {
+    expect(endpointAt(d, { x: 110, y: 30 }, 1)).toEqual({ nodeId: 'a', anchor: 'right' });
+    expect(endpointAt(d, { x: 125, y: 30 }, 0.5)).toEqual({ nodeId: 'a', anchor: 'right' });
+    expect(endpointAt(d, { x: 125, y: 30 }, 2).nodeId).toBeUndefined();
+  });
+
+  it('невидимая рамка группы не перехватывает привязку к участнику', () => {
+    const group = {
+      ...shape('g', -20, -20),
+      type: 'group' as const,
+      width: 140,
+      height: 100,
+      children: ['a'],
+    };
+    expect(endpointAt(doc([box('a'), group]), { x: 50, y: 30 }, 1).nodeId).toBe('a');
+  });
+
   it('рядом с якорем — эта сторона', () => {
     expect(endpointAt(d, { x: 50, y: 2 }, 1)).toEqual({ nodeId: 'a', anchor: 'top' });
   });

@@ -28,6 +28,7 @@ export function EditingOverlay() {
 
   const node = document.nodes[editingNodeId];
   if (!node) return null;
+  if (node.type === 'shape' && node.design) return null;
 
   // У картинки нет текста — оверлею нечего показывать.
   if (node.type === 'image' || node.type === 'draw') return null;

@@ -8,11 +8,14 @@
 
 import { ChevronLeft } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Toolbar } from '@/app/Toolbar';
 import { CanvasStage, type CanvasStageHandle } from '@/features/canvas/engine/CanvasStage';
 import { ShareButton, useCloudSync } from '@/features/cloud';
+import { focusNode } from '@/features/design/actions';
+import { DesignSidebar } from '@/features/design/ui/DesignSidebar';
+import { DesignTools } from '@/features/design/ui/DesignTools';
 import { ExportMenu } from '@/features/export';
 import { clearHistory, useHistorySession } from '@/features/history';
 import { InspectorPanel } from '@/features/inspector';
@@ -36,6 +39,8 @@ type LoadState = { name: string } | null | undefined;
 export function CanvasScreen() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedNode = searchParams.get('node');
   const [state, setState] = useState<LoadState>(undefined);
   const canvasRef = useRef<CanvasStageHandle>(null);
 
@@ -126,6 +131,15 @@ export function CanvasScreen() {
     };
   }, [projectId, loadDocument, closeDocument]);
 
+  useEffect(() => {
+    if (!state || !requestedNode) return;
+    const frame = requestAnimationFrame(() => {
+      if (useBoardStore.getState().document?.nodes[requestedNode]) focusNode(requestedNode);
+      else toast.info('Объект из ссылки больше не существует');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state, requestedNode]);
+
   if (state === null) {
     return (
       <main className="grid h-screen place-items-center bg-paper px-6 text-center">
@@ -172,6 +186,7 @@ export function CanvasScreen() {
         <SaveIndicator />
 
         <div className="ml-auto flex items-center gap-1.5">
+          <DesignTools name={state.name} />
           <ThemeToggle />
           {projectId && <ShareButton projectId={projectId} />}
           <ExportMenu name={state.name} />
@@ -179,6 +194,7 @@ export function CanvasScreen() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
+        <DesignSidebar />
         <div className="relative flex-1 overflow-hidden">
           <Toolbar />
           <CanvasStage ref={canvasRef} onThumbnail={saveThumbnail} />

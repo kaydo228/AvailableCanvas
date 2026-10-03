@@ -12,12 +12,15 @@
 
 import type Konva from 'konva';
 import { useCallback, useRef } from 'react';
+import { moveSection } from '@/features/design/actions';
+import { isSection } from '@/features/design/model';
 
 import { useBoardStore } from '@/shared/store/board';
 import type { Id } from '@/shared/types/document';
 
 interface Snapshot {
   anchorId: Id;
+  ids: Id[];
   anchor: { x: number; y: number };
   others: Array<{ node: Konva.Node; x: number; y: number }>;
 }
@@ -48,6 +51,7 @@ export function useGroupDrag() {
 
     snapshot.current = {
       anchorId: id,
+      ids: [...selection],
       anchor: { x: target.x(), y: target.y() },
       others,
     };
@@ -60,6 +64,12 @@ export function useGroupDrag() {
     const { updateNode } = useBoardStore.getState();
     const snap = snapshot.current;
 
+    const node = useBoardStore.getState().document?.nodes[id];
+    if (isSection(node) && !snap) {
+      moveSection(id, event.target.x(), event.target.y());
+      return;
+    }
+
     if (!snap || id !== snap.anchorId) {
       // Одиночное перетаскивание: пишем позицию в стор каждый кадр, иначе
       // привязанные линии догоняют фигуру только на отпускании и дёргаются.
@@ -70,32 +80,21 @@ export function useGroupDrag() {
     const dx = event.target.x() - snap.anchor.x;
     const dy = event.target.y() - snap.anchor.y;
 
-    updateNode(id, { x: event.target.x(), y: event.target.y() });
+    if (node && node.type !== 'connector') {
+      useBoardStore
+        .getState()
+        .moveNodes(snap.ids, event.target.x() - node.x, event.target.y() - node.y);
+    }
 
     for (const item of snap.others) {
       const position = { x: item.x + dx, y: item.y + dy };
       // Konva двигаем сами: узел не перетаскивается, он ведомый.
       item.node.position(position);
-      const otherId = item.node.id();
-      if (otherId) updateNode(otherId, position);
     }
   }, []);
 
-  const onDragEnd = useCallback((event: Konva.KonvaEventObject<DragEvent>) => {
-    const snap = snapshot.current;
+  const onDragEnd = useCallback((_event: Konva.KonvaEventObject<DragEvent>) => {
     snapshot.current = null;
-    if (!snap || event.target.id() !== snap.anchorId) return;
-
-    const dx = event.target.x() - snap.anchor.x;
-    const dy = event.target.y() - snap.anchor.y;
-    if (dx === 0 && dy === 0) return;
-
-    // Узел-якорь пишет себя сам, через onDragEnd своего рендерера.
-    const { updateNode } = useBoardStore.getState();
-    for (const item of snap.others) {
-      const id = item.node.id();
-      if (id) updateNode(id, { x: item.x + dx, y: item.y + dy });
-    }
   }, []);
 
   return { onDragStart, onDragMove, onDragEnd };
